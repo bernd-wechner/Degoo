@@ -122,3 +122,25 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+.settings/org.eclipse.core.resources.prefs
+
+.pydevproject
+
+.project
+
+test_data/
+
+degoo_cd
+degoo_get
+degoo_ll
+degoo_login
+degoo_ls
+degoo_mkdir
+degoo_path
+degoo_props
+degoo_put
+degoo_pwd
+degoo_rm
+degoo_tree
+degoo_user

@@ -3,6 +3,11 @@
 '''
 Degoo commands -- Some CLI commands to interact with a Degoo cloud drive
 
+Degoo lack a command line client, they lack a Linux client, but they
+expose a GraphQL API which their web app (and probably their phone app)
+communicate with. This is a reverse engineering based on observations of
+those communications aand a Python client implementation.
+
 @author:     Bernd Wechner
 
 @copyright:  2020. All rights reserved.
@@ -13,9 +18,7 @@ Degoo commands -- Some CLI commands to interact with a Degoo cloud drive
 @deffield    updated: Updated
 '''
 
-import sys
-import os
-import degoo
+import sys, os, degoo
 
 from argparse import ArgumentParser
 
@@ -27,6 +30,8 @@ __updated__ = '2020-06-03'
 DEBUG = 1
 TESTRUN = 0
 PROFILE = 0
+
+P = degoo.command_prefix
 
 class CLIError(Exception):
     '''Generic exception to raise and log different fatal errors.'''
@@ -73,21 +78,21 @@ USAGE
         parser.add_argument("-v", "--verbose", dest="verbose", action="count", help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         
-        if command == "degoo_ls" or command == "degoo_ll":
+        if command == P+"ls" or command == P+"ll":
             parser.add_argument('-l', '--long', action='store_true')
             parser.add_argument('-R', '--recursive', action='store_true')
             parser.add_argument('folder', help='The folder/path to list', nargs='?', default=degoo.CWD)
             args = parser.parse_args()
             
-            if command == "degoo_ll":
+            if command == P+"ll":
                 args.long = True
             
             degoo.ls(args.folder, args.long, args.recursive)
         
-        elif command == "degoo_pwd":
+        elif command == P+"pwd":
             print(f"Working Directory is {degoo.CWD['Path']}")
 
-        elif command == "degoo_props":
+        elif command == P+"props":
             parser.add_argument('path', help='The name, path, or ID of degoo item to return properties of (can be a device, folder, file).')
             args = parser.parse_args()
                         
@@ -97,13 +102,13 @@ USAGE
             for key, value in props.items():
                 print(f"\t{key}: {value}")
 
-        elif command == "degoo_path":
+        elif command == P+"path":
             parser.add_argument('path', help='The path to test.')
             args = parser.parse_args()
             
             print(f"Path is: {degoo.get_dir(args.path)}")
             
-        elif command == "degoo_cd":
+        elif command == P+"cd":
             parser.add_argument('folder', help='The folder/path to makre current.')
             args = parser.parse_args()
 
@@ -111,41 +116,50 @@ USAGE
             
             print(f"Working Directory is now {cwd['Path']}")
 
-        elif command == "degoo_tree":
+        elif command == P+"tree":
             parser.add_argument('-t', '--times', action='store_true', help="Show timestamps")
-            parser.add_argument('folder', nargs='?', help='The folder to put it in')
+            parser.add_argument('folder', nargs='?', help='The folder to put_file it in')
             args = parser.parse_args()
             degoo.tree(args.folder, args.times)
 
-        elif command == "degoo_mkdir":
+        elif command == P+"mkdir":
             parser.add_argument('folder', help='The folder/path to list')
             args = parser.parse_args()
             
-            degoo.mkpath(args.folder)
+            path = degoo.mkpath(args.folder)
+            print(f"Created folder {path}")
 
-        elif command == "degoo_rm":
+        elif command == P+"rm":
             parser.add_argument('file', help='The file/folder/path to remove')
             args = parser.parse_args()
             
-            degoo.rm(args.file)
+            path = degoo.rm(args.file)
+            print(f"Deleted {path}")
 
-        elif command == "degoo_get":
+        elif command == P+"get":
             parser.add_argument('file', help='The file/folder/path to get')
             args = parser.parse_args()
             
-            degoo.get(args.file)
+            degoo.get(args.file, args.verbose)
 
-        elif command == "degoo_put":
+        elif command == P+"put":
             parser.add_argument('file', help='The file/folder/path to put')
-            parser.add_argument('folder', nargs='?', help='The folder to put it in')
+            parser.add_argument('folder', nargs='?', help='The folder to put_file it in')
             args = parser.parse_args()
             
-            degoo.put(args.file, args.folder)
-
-        elif command == "degoo_login":
+            (ID, URL) = degoo.put(args.file, args.folder, args.verbose)
+            
+            if URL:
+                print(f"Uploaded to Degoo ID: {ID}, with Download URL\n{URL}")
+            elif ID:
+                print(f"Error: Uploaded to Degoo ID: {ID}, but no download URL was provided!")
+            else:
+                print(f"Error: Cannot upload {args.file}, it is not a File or Directory.")
+            
+        elif command == P+"login":
             degoo.login()
 
-        elif command == "degoo_user":
+        elif command == P+"user":
             props = degoo.userinfo()
             print(f"Logged in user:")
             for key, value in props.items():

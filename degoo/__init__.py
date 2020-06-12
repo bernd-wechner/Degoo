@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# encoding: utf-8
 '''
 Degoo API -- An API interface to interact with a Degoo cloud drive
 
@@ -20,19 +21,24 @@ from appdirs import user_config_dir
 from urllib import request
 from dateutil import parser
 import os, csv, json, time, datetime, requests, wget, magic, humanize, hashlib, base64
+from genericpath import isfile
 
 # An Error class for Degoo functions to raise if need be
 class DegooError(Exception):
     '''Generic exception to raise and log different fatal errors.'''
     def __init__(self, msg):
         super().__init__(type(self))
-        self.msg = f"Error: {msg}" 
+        self.msg = msg
     def __str__(self):
         return self.msg
     def __unicode__(self):
         return self.msg
 
 # URLS
+
+# A string to rpefix CLI commands with
+command_prefix = "degoo_"
+
 URL_login = "https://api.degoo.com/v1/production/login"
 URL_API   = "https://production-appsync.degoo.com/graphql"
 
@@ -41,6 +47,8 @@ cred_file  = os.path.join(user_config_dir("degoo"), "credentials.json")
 keys_file  = os.path.join(user_config_dir("degoo"), "keys.json")
 cwd_file   = os.path.join(user_config_dir("degoo"), "cwd.json")
 DP_file    = os.path.join(user_config_dir("degoo"), "default_properties.txt")
+
+__CACHE_ITEMS__ = {}
 
 ###########################################################################
 # Support functions
@@ -112,6 +120,8 @@ class API:
               6: "Document",
              10: "Recycle Bin",
            }
+    
+    folder_types = ["Folder", "Device", "Recycle Bin"]
     
     # A guess at the plans available
     PLANS = { 0: "Free 100 GB",
@@ -258,9 +268,11 @@ class API:
                     prefix = dns[properties['DeviceID']]+os.sep+"Recycle Bin" if binned else dns[properties['DeviceID']] 
                     properties["FilePath"] = f"{os.sep}{prefix}{properties['FilePath'].replace('/',os.sep)}"
         
-                # Convert ID to an int. 
+                # Convert ID and Sizeto an int. 
                 properties["ID"] = int(properties["ID"])
-                properties["ParentID"] = int(properties["ParentID"])
+                properties["ParentID"] = int(properties["ParentID"]) if properties["ParentID"] else 0
+                properties["MetadataID"] = int(properties["MetadataID"])
+                properties["Size"] = int(properties["Size"])
 
                 # Add a set of Human Readable time stamps based om the less readable API timestamps
                 times = self._human_readable_times(properties['CreationTime'], properties['LastModificationTime'], properties['LastUploadTime'])
@@ -313,7 +325,7 @@ class API:
                 else:
                     # Get the device names if we're not getting a root dir
                     # device_names calls back here (i.e. uses the getFileChildren3 API call)
-                    # with dir_id==0, to get the devices. We only need device names to prepend 
+                    # with dir_id==0, to get_file the devices. We only need device names to prepend 
                     # paths with if we're looking deeper than root.
                     dns = device_names()
                     
@@ -339,6 +351,9 @@ class API:
                 # Convert ID to an int. 
                 for i in items:
                     i["ID"] = int(i["ID"])
+                    i["ParentID"] = int(i["ParentID"]) if i["ParentID"] else 0
+                    i["MetadataID"] = int(i["MetadataID"])
+                    i["Size"] = int(i["Size"])
                     
                     # Add a set of Human Readable time stamps based om the less readable API timestamps
                     times = self._human_readable_times(i['CreationTime'], i['LastModificationTime'], i['LastUploadTime'])
@@ -411,6 +426,9 @@ class API:
         if response.ok:
             contents = get_children(parent_id)
             ids = {f["Name"]: int(f["ID"]) for f in contents}
+            if not name in ids:
+                obj = get_item(parent_id)
+                raise DegooError(f"setUploadFile2: Failed to find {name} in {obj['FilePath']}: {response}")
             return ids[name]
         
         else:
@@ -438,7 +456,10 @@ class API:
         if response.ok:
             rd = json.loads(response.text)
             
-            # The index 0 suggests maybe if we upload multiple files we get mutipple WriteAuths back
+            if rd.get("errors", None):
+                raise DegooError(f"getBucketWriteAuth2 failed with: {rd['errors']}")
+            
+            # The index 0 suggests maybe if we upload multiple files we get_file mutipple WriteAuths back
             RD = rd["data"]["getBucketWriteAuth2"][0]
             
             return RD
@@ -465,7 +486,7 @@ def split_path(path):
 def userinfo():
     return api.getUserInfo()    
 
-def mkpath(path):
+def mkpath(path, verbose=False):
     '''
     Analagous to Linux "mkdir -p", creaping all necessary parents along the way.
     
@@ -483,10 +504,11 @@ def mkpath(path):
     for d in dirs:
         # If the last char in path is os.sep then the last item in dirs is empty
         if d:
-            D = mkdir(d, parent_id=current_dir, silent=True)
-            current_dir = D["ID"]
+            current_dir = mkdir(d, current_dir, verbose)
+            
+    return get_item(current_dir)["FilePath"]
 
-def mkdir(name, parent_id=None, silent=False):
+def mkdir(name, parent_id=None, verbose=False):
     '''
     Makes a Degoo directory/folder or device
     
@@ -500,11 +522,13 @@ def mkdir(name, parent_id=None, silent=False):
     existing_names = [f["Name"] for f in contents]
     ids = {f["Name"]: int(f["ID"]) for f in contents}
     if name in existing_names:
-        if not silent:
-            print(f"Error: {name} already exists")
-        return fsi_dict(ids[name], name)
+        if verbose:
+            print(f"{name} already exists")
+        return ids[name]
     else:
-        return api.setUploadFile2(name, parent_id)
+        ID = api.setUploadFile2(name, parent_id)
+        if verbose:
+            print(f"Created directory {name} with ID {ID}")
 
 def rm(file):
     if isinstance(file, int):
@@ -515,9 +539,10 @@ def rm(file):
         print(f"Error: Illegal file: {file}")
         exit(1)
 
-    response = api.setDeleteFile4(file_id)
-    
-    print(f"Deleted {file}: {response}")
+    path = api.getOverlay3(file_id)["FilePath"]
+    response = api.setDeleteFile4(file_id)  # @UnusedVariable
+
+    return path
 
 def cd(path):
     CWD = get_dir(path)
@@ -569,7 +594,7 @@ def path_id(path):
 
 def get_item(path):
     '''
-    Returrn the Degoo object that path points to  (Folder or File, or whatever).
+    Return the Degoo object that path points to  (Folder or File, or whatever).
     
     This is just a dict of properties really.
 
@@ -580,8 +605,10 @@ def get_item(path):
     def props(degoo_id):
         # The root is special, it returns no properties from the degoo API
         # We dummy some up for internal use:
-        if degoo_id == 0:
-            return {
+        if degoo_id in __CACHE_ITEMS__:
+            return __CACHE_ITEMS__[degoo_id]
+        elif degoo_id == 0:
+            properties = {
                 "ID": 0,
                 "ParentID": None,
                 "Name": "/",
@@ -590,7 +617,10 @@ def get_item(path):
                 "CategoryName": "Root",
                 }
         else:
-            return api.getOverlay3(degoo_id)
+            properties = api.getOverlay3(degoo_id)
+        
+        __CACHE_ITEMS__[degoo_id] = properties
+        return properties
 
     if isinstance(path, int):
         return props(path)
@@ -658,8 +688,13 @@ def get_children(directory=None):
 
     return api.getFileChildren3(dir_id)
 
-def get(path):
-    item = get_item(path)
+def get_file(file, verbose=False):
+    item = get_item(file)
+    
+    # If we landed here with a directiory rather thanm file, just redirect
+    # to the approproate downloader.
+    if item["CategoryName"] in api.folder_types:
+        return get_directory(file)
     
     # Try the Optimized URL first I guess
     URL = item.get("OptimizedURL", None)
@@ -667,6 +702,7 @@ def get(path):
         URL = item.get("URL", None)
 
     Name = item.get("Name", None)
+    Path = item.get("FilePath", None)
 
     if URL and Name:
         # wget.download uses urllib.request.urlopen()
@@ -685,18 +721,82 @@ def get(path):
         opener.addheaders = [('User-agent', "SomethingSafe")]
         request.install_opener(opener)
         
-        # TODO: bug here in wghet. It shows a real buggy progress bar when no size is available.
-        # Now download the file with wget.
-        _ = wget.download(URL, out=Name)
+        if verbose:
+            print(f"Downloading {Path}")
+            
+        # wget has a bug and while it has a nice progress bar it render garbage 
+        # for Degoo because the download source fails to set the content-length 
+        # header. We know the notent length from the Degoo metadata though and so
+        # can specify it manually. wget does not support this but I've submitted
+        # a PR here: https://github.com/jamiejackherer/python3-wget/pull/4
+        _ = wget.download(URL, out=Name, size=item['Size'])
+        
+        # The default wqet progress bar leaves cursor at end of line.
+        # It failes to print a new line. This causing glitchy printing
+        # Easy fixed, 
+        print("")
+        
+        return item["FilePath"]
     else:
-        raise DegooError(f"{path} has no URL to download from.")
+        raise DegooError(f"{Path} has no URL to download from.")
 
-# TODO: Test this with atext file. 
-# It uploads seemingly fine, but I can't download it.
-# Download bombs with a missing URL.
-def put(file, path):
+def get_directory(folder, verbose=False):
+    item = get_item(folder)
+    
+    # If we landed here with a file rather thanm folder, just redirect
+    # to the approproate downloader.
+    if not item["CategoryName"] in api.folder_types:
+        return get_file(folder)
+    
+    dir_id = item['ID']
+
+    # Remember the current working directory
+    cwd = os.getcwd()
+    
+    # Make the target direcory if needed    
+    try:
+        os.mkdir(item['Name'])
+    except FileExistsError:
+        # Not a problem if the folder already exists
+        pass
+    
+    # Step down into the new directory for the downloads
+    os.chdir(item['Name'])
+    
+    # Fetch and classify all Degoo drive contents of this folder
+    children = get_children(dir_id)
+
+    files = [child for child in children if not child["CategoryName"] in api.folder_types]
+    folders = [child for child in children if child["CategoryName"] in api.folder_types]
+
+    # Download files
+    for f in files:
+        try:
+            get_file(f['ID'], verbose)
+        except DegooError as e:
+            if verbose:
+                print(e)
+
+    # Make the local folders and download into them
+    for f in folders:
+        get_directory(f['ID'], verbose)
+
+    # Having downloaded all the items in this folder chdir back up
+    os.chdir(cwd)
+
+def get(path, verbose=False):
+    item = get_item(path)
+
+    if item["CategoryName"] in api.folder_types:
+        return get_directory(item['ID'], verbose)
+    else:
+        return get_file(item['ID'], verbose)
+
+def put_file(file, path, verbose=False):
     # path better point to a folder not a file ... Not sure what happens if its a Device or Recycle Bin.
     dir_id = path_id(path)
+
+    MimeTypeOfFile = magic.Magic(mime=True).from_file(file)
 
     # Get the Authorisation to write to this directory
     # Provides the metdata we need for the upload   
@@ -704,23 +804,28 @@ def put(file, path):
     
     BaseURL = result["BaseURL"]
 
-    MimeTypeOfFile = magic.Magic(mime=True).from_file(file)
-    
     # We now POST to BaseURL and the body is the file but all these fields too
     Signature =      result["Signature"]
     GoogleAccessId = result["AccessKey"]["Value"]
     CacheControl =   result["AdditionalBody"][0]["Value"]  # Only one item in list not sure why indexed
     Policy =         result["PolicyBase64"]
     ACL =            result["ACL"]
+    KeyPrefix =      result["KeyPrefix"]  # Has a trailing / 
     
     # This one is a bit mysterious. The Key seems to be made up of 4 parts
     # separated by /. The first two are provided by getBucketWriteAuth2 as
     # as the KeyPrefix, the next appears to be the file extension, and the 
     # last an apparent filename that is consctucted as checksum.extension.
     # Odd, to say the least.
-    Type = "jpg"
-    Checksum = api.check_sum(file) 
-    Key = "{}{}/{}.{}".format(result["KeyPrefix"], Type, Checksum, Type)
+    Type = os.path.splitext(file)[1][1:]
+    Checksum = api.check_sum(file)
+    
+    if Type:     
+        Key = "{}{}/{}.{}".format(KeyPrefix, Type, Checksum, Type)
+    else:
+        # TODO: When there is no file extension, the Degoo webapp uses "unknown"
+        # but this fails to produce a successful upload too. A Degoo API bug.
+        Key = "{}/{}".format(KeyPrefix, Checksum)
     
     # We need filesize
     Size = os.path.getsize(file)
@@ -741,10 +846,80 @@ def put(file, path):
     
     # We expect a 204 stats result, which is silent acknowleddgement of success.
     if response.ok and response.status_code == 204:
-        return api.setUploadFile2(os.path.basename(file), dir_id, Size, Checksum)
+        # Theeres'a Google Upload ID returned in the headers. Not sure what use it is.
+        google_id = response.headers["X-GUploader-UploadID"]  # @UnusedVariable
+        
+        # Empirically the download URL seems failry predictable from the inputs we have.
+        # with two caveats:
+        #
+        # The expiry time is a little different. It's 14 days form now all right but
+        # now being when setUploadFile2 on the server has as now not the now we have here.
+        #
+        # The Signature is new, it's NOT the Signature that getBucketWriteAuth2 returned
+        # nor any obvious variation upon it (like base64 encoding)
+        expiry = str(int((datetime.datetime.utcnow() + datetime.timedelta(days=14)).timestamp()))
+        expected_URL = "".join([  # @UnusedVariable
+                    BaseURL.replace("storage-upload.googleapis.com/",""),
+                    Key,
+                    "?GoogleAccessId=", GoogleAccessId,
+                    "&Expires=", expiry,
+                    "&Signature=", Signature,
+                    "&use-cf-cache=true"])
+        
+        degoo_id = api.setUploadFile2(os.path.basename(file), dir_id, Size, Checksum)
+        props = api.getOverlay3(degoo_id)
+        
+        if verbose:
+            print(f"Download URL is: {props['URL']}")
+            
+        return (degoo_id, props['URL'])
     else:
         raise DegooError(f"Upload failed with: Failed with: {response}")
+
+def put_directory(directory, path, verbose=False):
+    IDs = {}
+    
+    target_dir = get_dir(path)
+    (target_junk, target_name) = os.path.split(directory)
+    
+    if verbose:
+        print(f"Creating directory {target_name} in {target_dir['Path']}")
         
+    Root = target_name
+    IDs[Root] = mkdir(target_name, target_dir['ID'])
+    
+    for root, dirs, files in os.walk(directory):
+        # if directory contains a head that is included in root and we don't want
+        # it when we're making dirs on the remote (cloud) drive and remembering the
+        # IDs of thos edirs.
+        relative_root = root.replace(target_junk+os.sep, "", 1)
+        
+        for name in dirs:
+            Name = os.path.join(relative_root, name)
+            if verbose:
+                print(f"Creating directory {name} in {Name}")
+            IDs[Name] = mkdir(name, IDs[relative_root])
+            
+        for name in files:
+            Name = os.path.join(relative_root, name)
+            if verbose:
+                print(f"Uploading file {Name}")
+            put_file(Name, IDs[relative_root])
+    
+    # TODO Work out how to hand Dir download URLs
+    return (IDs[Root], "No URL implemented for directory downloads just yet.")
+            
+def put(source, path, verbose=False):
+    isFile = os.path.isfile(source)
+    isDirectory = os.path.isdir(source)
+    
+    if isDirectory:
+        return put_directory(source, path, verbose)
+    elif isFile:
+        return put_file(source, path, verbose)
+    else:
+        return (None, None)
+    
 ###########################################################################
 # Text output functions
 
@@ -765,7 +940,7 @@ def ls(directory=None, long=False, recursive=False):
     if recursive:
         print('')
         for i in items:
-            if i['CategoryName'] in ["Folder", "Device", "Recycle Bin"]:
+            if i['CategoryName'] in api.folder_types:
                 ls(i['ID'], long, recursive)
         
 def tree(dir_id=0, show_times=False,_done=[]):
@@ -798,7 +973,7 @@ def tree(dir_id=0, show_times=False,_done=[]):
             
             print(prefix + name + postfix)
             
-            if cat in ["Folder", "Device", "Recycle Bin"]:
+            if cat in api.folder_types:
                 new_done = _done.copy()
                 new_done.append(ID == last_id)
                 tree(ID, show_times, new_done)
