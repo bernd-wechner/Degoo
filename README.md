@@ -24,9 +24,11 @@ And so, by studying their web app (which in written in Angular JS and managed wi
 
 It is written in Python and being developed under Linux. Being Python it's very likely highly portable, but there may be some small issues running on other systems. The only issues I can think of currently are:
 
-* It tries to use os.sep intelligently to give you a natural feel if say you're using Windows where it's \ rather than Linux of MacOS where it's /. But that's untested so far on Windows.
+* It tries to use os.sep intelligently to give you a natural feel if say you're using Windows where it's `\` rather than Linux of MacOS where it's `/`. But that's untested so far on Windows.
 
 * It uses [python-magic](https://pypi.org/project/python-magic/) to determine file types (needed for upload, as the API seems to demand this metadata). That may have some system dependencies.
+
+* It uses a custom patched version of [python-wget](https://github.com/bernd-wechner/python3-wget) as the one that pip provides is lacking some cucial features and the package seems sadly unmaintained and dead to the world. This patched version stands as an op Pull Request on the upstream with no action.
 
 A work in progress, it's not complete but at present it can reliably:
 
