@@ -27,7 +27,7 @@ __version__ = 0.1
 __date__ = '2020-06-03'
 __updated__ = '2020-06-03'
 
-DEBUG = 1
+DEBUG = 0
 TESTRUN = 0
 PROFILE = 0
 
@@ -50,7 +50,7 @@ def main(argv=None): # IGNORE:C0111
         argv = sys.argv
     else:
         sys.argv.extend(argv)
-
+        
     command = os.path.basename(sys.argv[0])
 
     program_version = f"v{__version__}" 
@@ -75,7 +75,7 @@ USAGE
     try:
         # Setup argument parser
         parser = ArgumentParser(description=program_license)
-        parser.add_argument("-v", "--verbose", dest="verbose", action="count", help="set verbosity level [default: %(default)s]")
+        parser.add_argument("-v", "--verbose", action="count", default=0, help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         
         if command == P+"ls" or command == P+"ll":
@@ -94,13 +94,29 @@ USAGE
 
         elif command == P+"props":
             parser.add_argument('path', help='The name, path, or ID of degoo item to return properties of (can be a device, folder, file).')
+            parser.add_argument('-R', '--recursive', action='store_true')
+            parser.add_argument('-b', '--brief', action='store_true')
             args = parser.parse_args()
-                        
-            props = degoo.get_item(args.path)
             
-            print(f"Properties of {args.path}:")
-            for key, value in props.items():
-                print(f"\t{key}: {value}")
+            if args.path.isdigit():
+                args.path = int(args.path)
+
+            properties = degoo.get_item(args.path, args.verbose, args.recursive)
+            
+            brief_props = ["ID", "CategoryName"]
+            
+            if args.recursive:
+                for path, props in properties.items():
+                    print(f"Properties of {path}:")
+                    for key, value in props.items():
+                        if not args.brief or key in brief_props:
+                            print(f"\t{key}: {value}")
+                    print("") # Blank line separating items
+            else:
+                print(f"Properties of {args.path}:")
+                for key, value in properties.items():
+                    if not args.brief or key in brief_props:
+                        print(f"\t{key}: {value}")
 
         elif command == P+"path":
             parser.add_argument('path', help='The path to test.')
@@ -143,27 +159,38 @@ USAGE
             degoo.get(args.file, args.verbose)
 
         elif command == P+"put":
-            parser.add_argument('file', help='The file/folder/path to put')
-            parser.add_argument('folder', nargs='?', help='The folder to put_file it in')
+            parser.add_argument('-d', '--dryrun', action='store_true', help="Show what would be uploaded but don't upload it.")
+            parser.add_argument('-f', '--force', action='store_true', help="Force uploads, else only upload if chnaged.")
+            parser.add_argument('local', help='The file/folder/path to put')
+            parser.add_argument('remote', nargs='?', help='The remote folder to put it in')
             args = parser.parse_args()
             
-            (ID, URL) = degoo.put(args.file, args.folder, args.verbose)
+            result = degoo.put(args.local, args.remote, verbose=args.verbose, if_changed=not args.force, dry_run=args.dryrun)
             
-            if URL:
-                print(f"Uploaded to Degoo ID: {ID}, with Download URL\n{URL}")
-            elif ID:
-                print(f"Error: Uploaded to Degoo ID: {ID}, but no download URL was provided!")
+            if len(result) == 3:
+                ID, Path, URL = result
+                print(f"Uploaded {args.local} to {Path} with Degoo ID: {ID} and Download URL\n{URL}")
+            elif len(result) == 2:
+                ID, Path  = result
+                print(f"Uploaded {args.local} to {Path} with Degoo ID: {ID}")
             else:
-                print(f"Error: Cannot upload {args.file}, it is not a File or Directory.")
+                print(f"WARNING: Cannot upload {args.local}, it is not a File or Directory.")
             
         elif command == P+"login":
-            degoo.login()
+            success = degoo.login()
+            if success:
+                print("Successfuly logged in.")
+            else:
+                print("Login failed.")
 
         elif command == P+"user":
             props = degoo.userinfo()
             print(f"Logged in user:")
             for key, value in props.items():
                 print(f"\t{key}: {value}")
+
+        elif command == P+"test":
+            degoo.test()
 
         return 0
     except KeyboardInterrupt:
