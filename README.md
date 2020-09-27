@@ -16,17 +16,17 @@ Support seems hit and miss. They are a small company:
 
 And have (only) two people on Customer Support so if they have [15 million users](https://www.techradar.com/news/the-best-cloud-storage#4-degoo), then  clearly they'd struggle to deliver customer support well. It's called outgrowing your boots.
 
-They have also chopped and churned, originally using P2P storage then moving away form that after a load of [poor reviews]([Degoo Reviews | Read Customer Service Reviews of degoo.com](https://www.trustpilot.com/review/degoo.com)). They had a Windows desktop client, but no more. They are still, it seems clearly trying to find their niche in this market and establish a service model that secures a lasting future.
+They have also chopped and churned, originally using P2P storage then moving away form that after a load of [poor reviews]((https://www.trustpilot.com/review/degoo.com)). They had a Windows desktop client, but no more. They are still, it seems clearly trying to find their niche in this market and establish a service model that secures a lasting future.
 
 My interest is in keeping server data backed-up in the cloud.
 
-And so, by studying their web app (which in written in Angular JS and managed with Webpack, communicating with a backend over a [graphQL]([GraphQL | A query language for your API](https://graphql.org/)) interface) I've written a simple CLI (command line interface) to the cloud storage.
+And so, by studying their web app (which in written in Angular JS and managed with Webpack, communicating with a backend over a [graphQL]((https://graphql.org/)) interface) I've written a simple CLI (command line interface) to the cloud storage.
 
 It is written in Python and being developed under Linux. Being Python it's very likely highly portable, but there may be some small issues running on other systems. The only issues I can think of currently are:
 
 * It tries to use os.sep intelligently to give you a natural feel if say you're using Windows where it's \ rather than Linux of MacOS where it's /. But that's untested so far on Windows.
 
-* It uses [python-magic]([python-magic · PyPI](https://pypi.org/project/python-magic/)) to determine file types (needed for upload, as the API seems to demand this metadata). That may have some system dependencies.
+* It uses [python-magic](https://pypi.org/project/python-magic/) to determine file types (needed for upload, as the API seems to demand this metadata). That may have some system dependencies.
 
 A work in progress, it's not complete but at present it can reliably:
 
@@ -44,7 +44,7 @@ A work in progress, it's not complete but at present it can reliably:
 
 Not implemented yet:
 
-* [Top Secret Cloud Storage]([Top secret / zero knowledge storage : Degoo Help Center](https://help.degoo.com/support/solutions/articles/77000065516-top-secret-zero-knowledge-storage)
+* [Top Secret Cloud Storage](https://help.degoo.com/support/solutions/articles/77000065516-top-secret-zero-knowledge-storage)
 
   * Degoo provide a good security focussed solution with their Top Secret vault, that they claim is 100% NSA proof. Only available on their phone app for now, not the web app. Will take some effort to analyse the cient-server interactions to provide CLI support.
 
