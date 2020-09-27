@@ -1,3 +1,5 @@
+# Degoo CLI Util(s)
+
 Degoo are a cloud storage provider based in Sweden, who provide fairly goo phone apps and web interface along with affordable plans, of up 10 TB storage.
 
 [https://degoo.com/](https://degoo.com/)
