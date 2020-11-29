@@ -18,9 +18,9 @@ those communications aand a Python client implementation.
 @deffield    updated: Updated
 '''
 
-import sys, os, degoo
+import sys, os, textwrap, degoo
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, HelpFormatter
 
 __all__ = []
 __version__ = 0.1
@@ -42,6 +42,10 @@ class CLIError(Exception):
         return self.msg
     def __unicode__(self):
         return self.msg
+    
+class RawFormatter(HelpFormatter):
+    def _fill_text(self, text, width, indent):
+        return "\n".join([textwrap.fill(line, width) for line in textwrap.indent(textwrap.dedent(text), indent).splitlines()])
 
 def main(argv=None): # IGNORE:C0111
     '''Command line options.'''
@@ -52,29 +56,30 @@ def main(argv=None): # IGNORE:C0111
         sys.argv.extend(argv)
         
     command = os.path.basename(sys.argv[0])
-
+    
     program_version = f"v{__version__}" 
     program_build_date = str(__updated__)
     program_version_message = '%%(prog)s %s (%s)' % (program_version, program_build_date)
     program_shortdesc = __import__('__main__').__doc__.split("\n")[1]
     
-    program_license = f'''{program_shortdesc}
+    program_license = f'''
+        {program_shortdesc}
 
-  Created by Bernd Wechner on {str(__date__)}.
-  Copyright 2020. All rights reserved.
+        Created by Bernd Wechner on {str(__date__)}.
+        Copyright 2020. All rights reserved.
 
-  Licensed under The Hippocratic License 2.1
-  https://firstdonoharm.dev/
+        Licensed under The Hippocratic License 2.1
+        https://firstdonoharm.dev/
 
-  Distributed on an "AS IS" basis without warranties
-  or conditions of any kind, either express or implied.
+        Distributed on an "AS IS" basis without warranties
+        or conditions of any kind, either express or implied.
 
-USAGE
-'''
+        USAGE:
+        '''
 
     try:
         # Setup argument parser
-        parser = ArgumentParser(description=program_license)
+        parser = ArgumentParser(description=program_license, formatter_class=RawFormatter)
         parser.add_argument("-v", "--verbose", action="count", default=0, help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         
@@ -88,7 +93,7 @@ USAGE
                 args.long = True
             
             degoo.ls(args.folder, args.long, args.recursive)
-        
+                
         elif command == P+"pwd":
             print(f"Working Directory is {degoo.CWD['Path']}")
 
@@ -153,19 +158,24 @@ USAGE
             print(f"Deleted {path}")
 
         elif command == P+"get":
-            parser.add_argument('file', help='The file/folder/path to get')
+            parser.add_argument('-d', '--dryrun', action='store_true', help="Show what would be uploaded but don't upload it.")
+            parser.add_argument('-f', '--force', action='store_true', help="Force downloads, else only if local file missing.")
+            parser.add_argument('-s', '--scheduled', action='store_true', help="Download only when the configured schedule allows.")
+            parser.add_argument('remote', help='The file/folder/path to get')
+            parser.add_argument('local', nargs='?', help='The directory to put it in (current working directory if not specified)')
             args = parser.parse_args()
             
-            degoo.get(args.file, args.verbose)
+            degoo.get(args.remote, args.local, args.verbose, not args.force, args.dryrun, args.scheduled)
 
         elif command == P+"put":
             parser.add_argument('-d', '--dryrun', action='store_true', help="Show what would be uploaded but don't upload it.")
-            parser.add_argument('-f', '--force', action='store_true', help="Force uploads, else only upload if chnaged.")
+            parser.add_argument('-f', '--force', action='store_true', help="Force uploads, else only upload if changed.")
+            parser.add_argument('-s', '--scheduled', action='store_true', help="Upload only when the configured schedule allows.")
             parser.add_argument('local', help='The file/folder/path to put')
             parser.add_argument('remote', nargs='?', help='The remote folder to put it in')
             args = parser.parse_args()
             
-            result = degoo.put(args.local, args.remote, verbose=args.verbose, if_changed=not args.force, dry_run=args.dryrun)
+            result = degoo.put(args.local, args.remote, args.verbose, not args.force, args.dryrun, args.scheduled)
             
             if len(result) == 3:
                 ID, Path, URL = result

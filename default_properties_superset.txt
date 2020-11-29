@@ -1,0 +1,38 @@
+ID
+MetadataID
+UserID
+DeviceID
+MetadataKey
+Name
+FilePath
+LocalPath
+URL
+OptimizedURL
+ThumbnailURL
+CreationTime
+LastModificationTime
+LastUploadTime
+ParentID
+Category
+Size
+Platform
+Distance
+IsSelfLiked
+Likes
+IsHidden
+IsInRecycleBin
+Description
+Country
+Province
+Place
+Location
+Location2 {Country Province Place __typename}
+GeoLocation {Latitude Longitude __typename}
+Data
+DataBlock
+CompressionParameters
+IsShared
+ShareTime
+Shareinfo {ShareTime __typename}
+__typename
+

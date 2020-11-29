@@ -20,7 +20,7 @@ those communications aand a Python client implementation.
 from appdirs import user_config_dir
 from urllib import request
 from dateutil import parser, tz
-import os, sys, csv, json, time, datetime, requests, wget, magic, humanize, hashlib, base64
+import os, sys, csv, json, time, datetime, requests, wget, magic, humanize, humanfriendly, hashlib, base64
 
 # An Error class for Degoo functions to raise if need be
 class DegooError(Exception):
@@ -49,6 +49,7 @@ cred_file  = os.path.join(user_config_dir("degoo"), "credentials.json")
 cwd_file   = os.path.join(user_config_dir("degoo"), "cwd.json")
 keys_file  = os.path.join(user_config_dir("degoo"), "keys.json")
 DP_file    = os.path.join(user_config_dir("degoo"), "default_properties.txt")
+sched_file = os.path.join(user_config_dir("degoo"), "schedule.json")
 
 # A local cache of Degoo items and contents, to speed up successive queries for them
 # BY convention we have Degoo ID 0 as the root directory and the API returns no 
@@ -117,6 +118,37 @@ def absolute_remote_path(path):
     else:
         return os.path.abspath(os.path.join(CWD["Path"], path.rstrip(os.sep)))
 
+def wait_until_next(time_of_day, verbose=0):
+    '''
+    Wait until the specified time. Uses Python sleep() which uses no CPU as rule
+    and works on a basis liek Zeno's dichotomy paradox, by sleeping to the half 
+    way point in successive trials unil we're with 0.1 second of the target.
+    
+    Used herein for scheduling uploads and downloads.  
+     
+    :param time_of_day: A time of day as time.time_struct.
+    '''
+    now = time.localtime()
+    if now < time_of_day:
+        today = datetime.datetime.now().date()
+        until = datetime.datetime.combine(today, datetime.datetime.fromtimestamp(time.mktime(time_of_day)).time())
+    else:
+        tomorrow = datetime.datetime.now().date() + datetime.timedelta(days=1)
+        until = datetime.datetime.combine(tomorrow, datetime.datetime.fromtimestamp(time.mktime(time_of_day)).time())
+    
+    if verbose > 0:
+        print(f"Waiting until {until.strftime('%A, %d/%m/%Y %H:%M:%S')}")
+    
+    while True:
+        diff = (until - datetime.datetime.now()).total_seconds()
+        if diff < 0: return       # In case end_datetime was in past to begin with
+        
+        if verbose > 1:
+            print(f"Waiting for {humanfriendly.format_timespan(diff/2)} seconds")
+            
+        time.sleep(diff/2)
+        if diff <= 0.1: return
+
 ###########################################################################
 # Load the current working directory, if available
 
@@ -124,6 +156,30 @@ CWD = ddd(0, "/")
 if os.path.isfile(cwd_file):
     with open(cwd_file, "r") as file:
         CWD = json.loads(file.read())
+
+###########################################################################
+# Read a schedule file or write one with default schedule if not there.
+#
+# get and put should have an argument that is optional for respecting a
+# schedule and the commands a -s option to respect the schedule thus 
+# defined. 
+#
+# get and put should sleep outside of the schedule window.
+#
+# Time formats to be secified to they can be read with:
+#
+# time.strptime(time_string, "%H:%M:%S")
+
+DEFAULT_SCHEDULE = {  "upload": ("01:00:00", "06:00:00"), 
+                    "download": ("01:00:00", "06:00:00") }
+
+SCHEDULE = DEFAULT_SCHEDULE
+if os.path.isfile(sched_file):
+    with open(sched_file, "r") as file:
+        SCHEDULE = json.loads(file.read())
+else:
+    with open(sched_file, "w") as file:
+        file.write(json.dumps(DEFAULT_SCHEDULE))
 
 ###########################################################################
 # Logging in is a prerequisite to using the API (a pre API step). The 
@@ -625,11 +681,13 @@ class API:
 
     def setDeleteFile4(self, degoo_id):
         '''
-        A Degoo Graph API call: Deletes a Degoo item identified by ID. 
+        A Degoo Graph API call: Deletes a Degoo item identified by ID. It is moved to the Recycle Bin 
+        for the device it was on, and this is not a secure delete. It must be expolicitly deleted 
+        from the Recylce bin to be a secure delete.
+        
+        #TODO: support an option to find and delete the file in the recycle bin,  
         
         :param degoo_id: The ID of a Degoo item to delete.
-        
-        #TODO: What if this is a folder, non-empty, are there safeguards 
         '''
         func = f"setDeleteFile4(Token: $Token, IsPermanent: $IsPermanent, IDs: $IDs)"
         query = f"mutation SetDeleteFile4($Token: String!, $IsPermanent: Boolean!, $IDs: [IDType]!) {{ {func} }}"
@@ -1126,21 +1184,87 @@ def get_children(directory=None):
             
     return __CACHE_CONTENTS__[dir_id]
 
-def get_file(file, verbose=0):
+def has_changed(local_filename, remote_path, verbose=0):
     '''
-    Downloads a specified file from Degoo. 
+    Determines if a local local_filename has changed since last upload.
+     
+    :param local_filename: The local local_filename ((full or relative remote_path)
+    :param remote_path:    The Degoo path it was uploaded to (can be a Folder or a File, either relative or abolute remote_path)
+    :param verbose:        Print useful tracking/diagnostic information
     
-    :param file: An int or str or None (for the current working directory)
-    :param verbose: Print useful tracking/diagnostic information  
-    
-    :returns: the FilePath property of the downloaded file.
+    :returns: True if local local_filename has chnaged since last upload, false if not.
     '''
-    item = get_item(file)
+    # We need the local local_filename name, size and last modification time
+    Name = os.path.basename(local_filename) 
+    Size = os.path.getsize(local_filename)
+    LastModificationTime = datetime.datetime.fromtimestamp(os.path.getmtime(local_filename)).astimezone(tz.tzlocal())
+
+    # Get the files' properties either from the folder it's in or the file itself
+    # Depending on what was specified in remote_path (the containing folder or the file)
+    if is_folder(remote_path):
+        files = get_children(remote_path)
+        
+        sizes = {f["Name"]: int(f["Size"]) for f in files}
+        times = {f["Name"]: int(f["LastUploadTime"]) for f in files}
+
+        if Name in sizes:
+            Remote_Size = sizes[Name] 
+            LastUploadTime = datetime.datetime.utcfromtimestamp(int(times[Name])/1000).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
+        else:
+            Remote_Size = 0
+            LastUploadTime = datetime.datetime.utcfromtimestamp(0).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
+    else:
+        props =  get_item(remote_path)
+        
+        if props:
+            Remote_Size = props["Size"]
+            LastUploadTime = datetime.datetime.utcfromtimestamp(int(props["LastUploadTime"])/1000).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
+        else:
+            Remote_Size = 0
+            LastUploadTime = datetime.datetime.utcfromtimestamp(0).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
+        
+    if verbose>0:
+        print(f"{local_filename}: ")
+        print(f"\tLocal size: {Size}")
+        print(f"\tRemote size: {Remote_Size}")
+        print(f"\tLast Modified: {LastModificationTime}")
+        print(f"\tLast Uploaded: {LastUploadTime}")
+        
+    # We only have size and upload time available at present
+    # TODO: See if we can coax the check_sum we calculated for upload out of Degoo for testing again against the local check_sum. 
+    return Size != Remote_Size or LastModificationTime > LastUploadTime
+
+def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry_run=False, schedule=False):
+    '''
+    Downloads a specified remote_file from Degoo. 
     
-    # If we landed here with a directiory rather thanm file, just redirect
+    :param remote_file: An int or str or None (for the current working directory)
+    :param local_directory: The local directory into which to drop the downloaded file
+    :param verbose:    Print useful tracking/diagnostic information
+    :param if_missing: Only download the remote_file if it's missing locally (i.e. don't overwrite local files)
+    :param dry_run:    Don't actually download the remote_file ... 
+    :param schedule:   Respect the configured schedule (i.e download only when schedule permits) 
+    
+    :returns: the FilePath property of the downloaded remote_file.
+    '''
+    if schedule:
+        window = SCHEDULE["download"]
+        window_start = time.strptime(window[0], "%H:%M:%S")
+        window_end = time.strptime(window[1], "%H:%M:%S")
+        now = time.localtime()
+        
+        in_window = now > min(window_start, window_end) and now < max(window_start, window_end)
+        
+        if ((window_start < window_end and not in_window)
+        or  (window_start > window_end and in_window)):
+            wait_until_next(window_start, verbose)
+            
+    item = get_item(remote_file)
+    
+    # If we landed here with a directory rather than remote_file, just redirect
     # to the approproate downloader.
     if item["CategoryName"] in api.folder_types:
-        return get_directory(file)
+        return get_directory(remote_file)
     
     # Try the Optimized URL first I guess
     URL = item.get("OptimizedURL", None)
@@ -1151,72 +1275,108 @@ def get_file(file, verbose=0):
     Path = item.get("FilePath", None)
     Size = item.get('Size', 0)
 
-    if URL and Name:
-        # We sue wget which outputs a progress bar to stdout.
-        # This is the only method that writes to stdout because wget does so we do.
-        if verbose>0:
-            print(f"Downloading {Path}")
-            
-        # Note:
-        #
-        # This relies on a special version of wget at:
-        #
-        #    https://github.com/bernd-wechner/python3-wget
-        #
-        # which has an upstrema PR are:
-        #
-        #    https://github.com/jamiejackherer/python3-wget/pull/4
-        #
-        # wget has a bug and while it has a nice progress bar it renders garbage 
-        # for Degoo because the download source fails to set the content-length 
-        # header. We know the content length from the Degoo metadata though and so
-        # can specify it manually.
-        #
-        # The Degoo API also rejects the User-Agent that urllib provides by default
-        # and we need to set one it accepts. Anything works in fact just not the one
-        # python-urllib uses, which seems to be blacklisted.  
-        
-        _ = wget.download(URL, out=Name, size=Size, headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/83.0.4103.61 Chrome/83.0.4103.61 Safari/537.36"})
-        
-        # The default wqet progress bar leaves cursor at end of line.
-        # It fails to print a new line. This causing glitchy printing
-        # Easy fixed, 
-        print("")
-        
-        return item["FilePath"]
+    # Remember the current working directory
+    cwd = os.getcwd()
+    
+    if local_directory is None:
+        dest_file = os.path.join(os.getcwd(), Name)
+    elif os.path.isdir(local_directory):
+        os.chdir(local_directory)
+        dest_file = os.path.join(local_directory, Name)
     else:
-        raise DegooError(f"{Path} has no URL to download from.")
+        raise DegooError(f"get_file: '{local_directory}' is not a directory.")
 
-def get_directory(folder, verbose=0):
+    if URL and Name:
+        if not if_missing or not os.path.exists(dest_file):
+            # We use wget which outputs a progress bar to stdout.
+            # This is the only method that writes to stdout because wget does so we do.
+            if verbose>0:
+                if dry_run:
+                    print(f"Would download {Path} to {dest_file}")
+                else:
+                    print(f"Downloading {Path} to {dest_file}")
+                
+            # Note:
+            #
+            # This relies on a special version of wget at:
+            #
+            #    https://github.com/bernd-wechner/python3-wget
+            #
+            # which has an upstream PR are:
+            #
+            #    https://github.com/jamiejackherer/python3-wget/pull/4
+            #
+            # wget has a bug and while it has a nice progress bar it renders garbage 
+            # for Degoo because the download source fails to set the content-length 
+            # header. We know the content length from the Degoo metadata though and so
+            # can specify it manually.
+            #
+            # The Degoo API also rejects the User-Agent that urllib provides by default
+            # and we need to set one it accepts. Anything works in fact just not the one
+            # python-urllib uses, which seems to be blacklisted.  
+            
+            if not dry_run:
+                _ = wget.download(URL, out=Name, size=Size, headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/83.0.4103.61 Chrome/83.0.4103.61 Safari/537.36"})
+            
+                # The default wqet progress bar leaves cursor at end of line.
+                # It fails to print a new line. This causing glitchy printing
+                # Easy fixed, 
+                print("")
+    
+            # Having downloaded the file chdir back to where we started
+            os.chdir(cwd)
+            
+            return item["FilePath"]
+        else:
+            if verbose>1:
+                if dry_run:
+                    print(f"Would NOT download {Path}")
+                else:
+                    print(f"Not downloading {Path}")
+    else:
+        raise DegooError(f"{Path} apparantly has no URL to download from.")
+
+def get_directory(remote_folder, local_directory=None, verbose=0, if_missing=False, dry_run=False, schedule=False):
     '''
     Downloads a Directory and all its contents (recursively).
     
-    :param folder: An int or str or None (for the current working directory)
-    :param verbose: Print useful tracking/diagnostic information
+    :param remote_folder: An int or str or None (for the current working directory)
+    :param local_directory: The local directory into which to drop the downloaded folder
+    :param verbose:    Print useful tracking/diagnostic information
+    :param if_missing: Only download files missing locally (i.e don't overwrite local files)
+    :param dry_run:    Don't actually download the file ... 
+    :param schedule:   Respect the configured schedule (i.e download only when schedule permits) 
     '''
-    item = get_item(folder)
+    item = get_item(remote_folder)
     
-    # If we landed here with a file rather thanm folder, just redirect
+    # If we landed here with a file rather than folder, just redirect
     # to the approproate downloader.
     if not item["CategoryName"] in api.folder_types:
-        return get_file(folder)
+        return get_file(remote_folder)
     
     dir_id = item['ID']
 
     # Remember the current working directory
     cwd = os.getcwd()
     
+    if local_directory is None:
+        pass # all good, just use cwd
+    elif os.path.isdir(local_directory):
+        os.chdir(local_directory)
+    else:
+        raise DegooError(f"get_file: '{local_directory}' is not a directory.")
+    
     # Make the target direcory if needed    
     try:
         os.mkdir(item['Name'])
     except FileExistsError:
-        # Not a problem if the folder already exists
+        # Not a problem if the remote folder already exists
         pass
     
     # Step down into the new directory for the downloads
     os.chdir(item['Name'])
     
-    # Fetch and classify all Degoo drive contents of this folder
+    # Fetch and classify all Degoo drive contents of this remote folder
     children = get_children(dir_id)
 
     files = [child for child in children if not child["CategoryName"] in api.folder_types]
@@ -1225,7 +1385,7 @@ def get_directory(folder, verbose=0):
     # Download files
     for f in files:
         try:
-            get_file(f['ID'], verbose)
+            get_file(f['ID'], local_directory, verbose, if_missing, dry_run, schedule)
             
         # Don't stop on a DegooError, report it but keep going.
         except DegooError as e:
@@ -1234,93 +1394,77 @@ def get_directory(folder, verbose=0):
 
     # Make the local folders and download into them
     for f in folders:
-        get_directory(f['ID'], verbose)
+        get_directory(f['ID'], local_directory, verbose, if_missing, dry_run, schedule)
 
-    # Having downloaded all the items in this folder chdir back up
+    # Having downloaded all the items in this remote folder chdir back to where we started
     os.chdir(cwd)
 
-def get(path, verbose=0):
-    item = get_item(path)
+def get(remote_path, local_directory=None, verbose=0, if_missing=False, dry_run=False, schedule=False):
+    '''
+    Downloads a file or folder from Degoo.
+    
+    :param remote_path: The file or folder (a degoo path) to download
+    :param local_directory: The local directory into which to drop the download
+    :param verbose:    Print useful tracking/diagnostic information
+    :param if_missing: Only download the file if it's missing (i.e. don't overwrite local files)
+    :param dry_run:    Don't actually download the file ... 
+    :param schedule:   Respect the configured schedule (i.e download only when schedule permits) 
+    '''
+    item = get_item(remote_path)
 
     if item["CategoryName"] in api.folder_types:
-        return get_directory(item['ID'], verbose)
+        return get_directory(item['ID'], local_directory, verbose, if_missing, dry_run, schedule)
     else:
-        return get_file(item['ID'], verbose)
-    
-def has_changed(file, path, verbose=0):
-    '''
-    Determines if a local file has changed since last upload.
-     
-    :param file:    The local file ((full or relative path)
-    :param path:    The Degoo file path it was uploaded to (must be a Folder, either relative or abolute path)
-    :param verbose: Print useful tracking/diagnostic information
-    
-    :returns: True if local file has chnaged since last upload, false if not.
-    '''
-    # We need the local file name, size and last modification time
-    Name = os.path.basename(file) 
-    Size = os.path.getsize(file)
-    LastModificationTime = datetime.datetime.fromtimestamp(os.path.getmtime(file)).astimezone(tz.tzlocal())
+        return get_file(item['ID'], local_directory, verbose, if_missing, dry_run, schedule)
 
-    # path better point to a folder not a file ... Not sure what happens if its a Device or Recycle Bin.
-    files = get_children(path)
-    
-    sizes = {f["Name"]: int(f["Size"]) for f in files}
-    times = {f["Name"]: int(f["LastUploadTime"]) for f in files}
-
-    if Name in sizes:
-        Remote_Size = sizes[Name] 
-        LastUploadTime = datetime.datetime.utcfromtimestamp(int(times[Name])/1000).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
-        
-        if verbose>0:
-            print(f"{file}: ")
-            print(f"\tLocal size: {Size}")
-            print(f"\tRemote size: {Remote_Size}")
-            print(f"\tLast Modified: {LastModificationTime}")
-            print(f"\tLast Uploaded: {LastUploadTime}")
-            
-        # We only have size and upload time available at present
-        # TODO: See if we can coax the check_sum we calculated for upload out of Degoo for testing again against the local check_sum. 
-        return Size != Remote_Size or LastModificationTime > LastUploadTime
-    else:
-        # File does not exist in remote path so, nominally, has changed (needs upload)
-        return True
-
-def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
+def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
     '''
-    Uploads a file to the Degoo cloud store.
+    Uploads a local_file to the Degoo cloud store.
     
     TODO: See if we can get a progress bar on this, like we do for the download wget.
     TODO: https://medium.com/google-cloud/google-cloud-storage-signedurl-resumable-upload-with-curl-74f99e41f0a2
     
-    :param file:       The local file ((full or relative path)
-    :param path:       The Degoo file path to upload it to (must be a Folder, either relative or abolute path)
-    :param verbose:    Print useful tracking/diagnostic information
-    :param if_changed: Only upload the file if it's changed
-    :param dry_run:    Don't actually upload the file ... 
+    :param local_file:     The local file ((full or relative remote_folder)
+    :param remote_folder:  The Degoo folder upload it to (must be a Folder, either relative or abolute path)
+    :param verbose:        Print useful tracking/diagnostic information
+    :param if_changed:     Only upload the local_file if it's changed
+    :param dry_run:        Don't actually upload the local_file ... 
+    :param schedule:       Respect the configured schedule (i.e upload only when schedule permits) 
     
-    :returns: A tuple containing the Degoo ID, Remote file path and the download URL of the file.
+    :returns: A tuple containing the Degoo ID, Remote file path and the download URL of the local_file.
     '''
-    dest = get_item(path)
+    if schedule:
+        window = SCHEDULE["upload"]
+        window_start = time.strptime(window[0], "%H:%M:%S")
+        window_end = time.strptime(window[1], "%H:%M:%S")
+        now = time.localtime()
+        
+        in_window = now > min(window_start, window_end) and now < max(window_start, window_end)
+        
+        if ((window_start < window_end and not in_window) 
+        or  (window_start > window_end and in_window)):
+            wait_until_next(window_start, verbose)
+
+    dest = get_item(remote_folder)
     dir_id = dest["ID"]
     dir_path = dest["FilePath"]
     
     if not is_folder(dir_id):
-        raise DegooError(f"put_file: {path} is not a remote folder!")
+        raise DegooError(f"put_file: {remote_folder} is not a remote folder!")
     
     if verbose>1:
-        print(f"Asked to upload {file} to {dir_path}: {if_changed=} {dry_run=}")
+        print(f"Asked to upload {local_file} to {dir_path}: {if_changed=} {dry_run=}")
         
     # Upload only if:
     #    if_changed is False and dry_run is False (neither is true)
     #    if_changed is True and has_changed is true and dry_run is False
-    if (not if_changed or has_changed(file, path, verbose-1)):
+    if (not if_changed or has_changed(local_file, remote_folder, verbose-1)):
         if dry_run:
             if verbose>0:
-                print(f"Would upload {file} to {dir_path}")
+                print(f"Would upload {local_file} to {dir_path}")
         else:
             if verbose>0:
-                print(f"Uploading {file} to {dir_path}")
+                print(f"Uploading {local_file} to {dir_path}")
             # The steps involved in an upload are 4 and as follows:
             #
             # 1. Call getBucketWriteAuth2 to get the URL and parameters we need for upload
@@ -1328,16 +1472,22 @@ def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
             # 3. Call setUploadFile2 to inform Degoo it worked and create the Degoo item that maps to it
             # 4. Call getOverlay3 to fetch the Degoo item this created so we can see that worked (and return the download URL)
             
-            MimeTypeOfFile = magic.Magic(mime=True).from_file(file)
+            MimeTypeOfFile = magic.Magic(mime=True).from_file(local_file)
         
+            #################################################################
+            ## STEP 1: getBucketWriteAuth2
+            
             # Get the Authorisation to write to this directory
             # Provides the metdata we need for the upload   
             result = api.getBucketWriteAuth2(dir_id)
             
-            # Then upload the file to the nominated URL
+            #################################################################
+            ## STEP 2: POST to BaseURL
+
+            # Then upload the local_file to the nominated URL
             BaseURL = result["BaseURL"]
         
-            # We now POST to BaseURL and the body is the file but all these fields too
+            # We now POST to BaseURL and the body is the local_file but all these fields too
             Signature =      result["Signature"]
             GoogleAccessId = result["AccessKey"]["Value"]
             CacheControl =   result["AdditionalBody"][0]["Value"]  # Only one item in list not sure why indexed
@@ -1347,22 +1497,23 @@ def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
             
             # This one is a bit mysterious. The Key seems to be made up of 4 parts
             # separated by /. The first two are provided by getBucketWriteAuth2 as
-            # as the KeyPrefix, the next appears to be the file extension, and the 
+            # as the KeyPrefix, the next appears to be the local_file extension, and the 
             # last an apparent filename that is consctucted as checksum.extension.
             # Odd, to say the least.
-            Type = os.path.splitext(file)[1][1:]
-            Checksum = api.check_sum(file)
+            Type = os.path.splitext(local_file)[1][1:]
+            Checksum = api.check_sum(local_file)
             
             if Type:     
                 Key = "{}{}/{}.{}".format(KeyPrefix, Type, Checksum, Type)
             else:
-                # TODO: When there is no file extension, the Degoo webapp uses "unknown"
-                # but this fails to produce a successful upload too. A Degoo API bug.
+                # TODO: When there is no local_file extension, the Degoo webapp uses "unknown"
+                # This requires a little more testing. It seems to work with any value. 
                 Key = "{}{}/{}.{}".format(KeyPrefix, "@", Checksum, "@")
             
             # We need filesize
-            Size = os.path.getsize(file)
-            # Now upload the file    
+            Size = os.path.getsize(local_file)
+            
+            # Now upload the local_file    
             parts = [
                 ('key', (None, Key)),
                 ('acl', (None, ACL)),
@@ -1371,7 +1522,7 @@ def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
                 ('GoogleAccessId', (None, GoogleAccessId)),
                 ('Cache-control', (None, CacheControl)),
                 ('Content-Type', (None, MimeTypeOfFile)),
-                ('file', (os.path.basename(file), open(file, 'rb'), MimeTypeOfFile))
+                ('file', (os.path.basename(local_file), open(local_file, 'rb'), MimeTypeOfFile))
             ]
             
             heads = {"ngsw-bypass": "1", "x-client-data": "CIS2yQEIpbbJAQipncoBCLywygEI97TKAQiXtcoBCO21ygEIjrrKAQ=="}
@@ -1379,7 +1530,7 @@ def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
             # Perform the upload
             # TODO: Can we get a progress bar on the this? Web app has one.  
             response = requests.post(BaseURL, files=parts, headers=heads)
-            
+
             # We expect a 204 status result, which is silent acknowledgement of success.
             if response.ok and response.status_code == 204:
                 # Theeres'a Google Upload ID returned in the headers. Not sure what use it is.
@@ -1416,7 +1567,7 @@ def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
 #                 #         The request signature we calculated does not match the signature you provided. Check your Google secret key and signing method.
 #                 #     </Message>
 #                 #     <StringToSign>
-#                 #         GET 1593121729 /degoo-production-large-file-us-east1.degoo.me/gCkuIp/tISlDA/ChT/gXKXPh2ULNAtufkHfMQ+hE0CSRAA
+#                 #         GET 1593121729 /degoo-production-large-local_file-us-east1.degoo.me/gCkuIp/tISlDA/ChT/gXKXPh2ULNAtufkHfMQ+hE0CSRAA
 #                 #     </StringToSign>
 #                 # </Error>
 #                 #
@@ -1433,8 +1584,15 @@ def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
 #                             "&Expires=", expiry,
 #                             "&Signature=", Signature,
 #                             "&use-cf-cache=true"]) # @UnusedVariable
+
+                #################################################################
+                ## STEP 3: setUploadFile2
                 
-                degoo_id = api.setUploadFile2(os.path.basename(file), dir_id, Size, Checksum)
+                degoo_id = api.setUploadFile2(os.path.basename(local_file), dir_id, Size, Checksum)
+
+                #################################################################
+                ## STEP 4: getOverlay3
+
                 props = api.getOverlay3(degoo_id)
                 
                 Path = props['FilePath']
@@ -1451,12 +1609,12 @@ def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
                 raise DegooError(f"Upload failed with: Failed with: {response}")
     else:
         if dry_run and verbose:
-            print(f"Would NOT upload {file} to {dir_path} as it has not changed since last upload.")
+            print(f"Would NOT upload {local_file} to {dir_path} as it has not changed since last upload.")
             
         children = get_children(dir_id)
         props = {child['Name']: child for child in children}
         
-        filename = os.path.basename(file)
+        filename = os.path.basename(local_file)
         if filename in props:
             ID = props[filename]['ID']
             Path = props[filename]['FilePath']
@@ -1464,28 +1622,29 @@ def put_file(file, path, verbose=0, if_changed=False, dry_run=False):
 
         return (ID, Path, URL)
 
-def put_directory(directory, path, verbose=0, if_changed=False, dry_run=False):
+def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
     '''
-    Uploads a directory recursively to the Degoo cloud store.
+    Uploads a local directory recursively to the Degoo cloud store.
 
-    :param directory: The local directory (full or relative path) 
-    :param path:    The Degoo file path to upload it to (must be a Folder, either relative or abolute path)
+    :param local_directory: The local directory (full or relative remote_folder) 
+    :param remote_folder:    The Degoo folder to upload it to (must be a Folder, either relative or abolute path)
     :param verbose: Print useful tracking/diagnostic information
     :param if_changed: Uploads only files changed since last upload  
     :param dry_run: Don't actually upload anything ...
+    :param schedule:   Respect the configured schedule (i.e upload only when schedule permits) 
 
     :returns: A tuple containing the Degoo ID and the Remote file path
     '''
     IDs = {}
     
-    target_dir = get_dir(path)
-    (target_junk, target_name) = os.path.split(directory)
+    target_dir = get_dir(remote_folder)
+    (target_junk, target_name) = os.path.split(local_directory)
     
     Root = target_name
     IDs[Root] = mkdir(target_name, target_dir['ID'], verbose-1, dry_run)
     
-    for root, dirs, files in os.walk(directory):
-        # if directory contains a head that is included in root and we don't want
+    for root, dirs, files in os.walk(local_directory):
+        # if local directory contains a head that is included in root then we don't want
         # it when we're making dirs on the remote (cloud) drive and remembering the
         # IDs of those dirs.
         if target_junk:
@@ -1501,27 +1660,28 @@ def put_directory(directory, path, verbose=0, if_changed=False, dry_run=False):
         for name in files:
             Name = os.path.join(relative_root, name)
             
-            put_file(Name, IDs[relative_root], verbose, if_changed, dry_run)
+            put_file(Name, IDs[relative_root], verbose, if_changed, dry_run, schedule)
     
     # Directories have no download URL, they exist only as Degoo metadata
     return (IDs[Root], target_dir["Path"])
             
-def put(source, path, verbose=0, if_changed=False, dry_run=False):
+def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
     '''
-    Uplads a file or folder to teh Degoo cloud store
+    Uplads a file or folder to the Degoo cloud store
     
-    :param source: The path (absolute or relative) of a loca file or folder
-    :param path:    The Degoo file path to upload it to (must be a Folder, either relative or abolute path)
+    :param local_path: The path (absolute or relative) of a local file or folder
+    :param remote_folder: The Degoo path to upload it to (must be a Folder, either relative or absolute path)
     :param verbose: Print useful tracking/diagnostic information
     :param if_changed: Uploads only files changed since last upload  
+    :param schedule:   Respect the configured schedule (i.e upload only when schedule permits) 
     '''
-    isFile = os.path.isfile(source)
-    isDirectory = os.path.isdir(source)
+    isFile = os.path.isfile(local_path)
+    isDirectory = os.path.isdir(local_path)
     
     if isDirectory:
-        return put_directory(source, path, verbose, if_changed, dry_run)
+        return put_directory(local_path, remote_folder, verbose, if_changed, dry_run, schedule)
     elif isFile:
-        return put_file(source, path, verbose, if_changed, dry_run)
+        return put_file(local_path, remote_folder, verbose, if_changed, dry_run, schedule)
     else:
         return None
     
