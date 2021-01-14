@@ -210,8 +210,8 @@ def main(argv=None): # IGNORE:C0111
         if DEBUG or TESTRUN:
             raise(e)
         indent = len(command) * " "
-        sys.stderr.write(command + ": " + repr(e) + "\n")
-        sys.stderr.write(indent + "  for help use --help")
+        sys.stderr.write(command + ": " + str(e) + "\n")
+        sys.stderr.write(indent + "  for help use --help\n")
         return 2
 
 if __name__ == "__main__":

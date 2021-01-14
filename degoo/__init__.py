@@ -451,6 +451,7 @@ class API:
                     properties['AccountType'] = self.PLANS.get(properties['AccountType'], properties['AccountType'])
                     properties['UsedQuota'] = humanize.naturalsize(int(properties['UsedQuota']))
                     properties['TotalQuota'] = humanize.naturalsize(int(properties['TotalQuota']))
+                    del properties['__typename']
                 
                 return properties
             else:
@@ -686,7 +687,7 @@ class API:
         else:            
             raise DegooError(f"getFilesFromPaths failed with: {response}")
 
-    def setDeleteFile4(self, degoo_id):
+    def setDeleteFile5(self, degoo_id):
         '''
         A Degoo Graph API call: Deletes a Degoo item identified by ID. It is moved to the Recycle Bin 
         for the device it was on, and this is not a secure delete. It must be expolicitly deleted 
@@ -696,10 +697,10 @@ class API:
         
         :param degoo_id: The ID of a Degoo item to delete.
         '''
-        func = f"setDeleteFile4(Token: $Token, IsPermanent: $IsPermanent, IDs: $IDs)"
-        query = f"mutation SetDeleteFile4($Token: String!, $IsPermanent: Boolean!, $IDs: [IDType]!) {{ {func} }}"
+        func = f"setDeleteFile5(Token: $Token, IsPermanent: $IsPermanent, IDs: $IDs)"
+        query = f"mutation SetDeleteFile5($Token: String!, $IsPermanent: Boolean!, $IDs: [IDType]!) {{ {func} }}"
     
-        request = { "operationName": "SetDeleteFile4",
+        request = { "operationName": "SetDeleteFile5",
                     "variables": {
                         "Token": self.KEYS["Token"],
                         "IDs": [{ "FileID": degoo_id }],
@@ -720,11 +721,11 @@ class API:
                 for error in rd["errors"]:
                     messages.append(error["message"])
                 message = '\n'.join(messages)
-                raise DegooError(f"setDeleteFile4 failed with: {message}")
+                raise DegooError(f"setDeleteFile5 failed with: {message}")
             else:
                 return response.text
         else:
-            raise DegooError(f"setDeleteFile4 failed with: {response}")
+            raise DegooError(f"setDeleteFile5 failed with: {response}")
 
     def setUploadFile2(self, name, parent_id, size="0", checksum="CgAQAg"):
         '''
@@ -960,7 +961,7 @@ def rm(file):
         raise DegooError(f"rm: Illegal file: {file}")
 
     path = api.getOverlay3(file_id)["FilePath"]
-    response = api.setDeleteFile4(file_id)  # @UnusedVariable
+    response = api.setDeleteFile5(file_id)  # @UnusedVariable
 
     return path
 
