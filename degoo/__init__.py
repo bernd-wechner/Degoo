@@ -57,7 +57,7 @@ sched_file = os.path.join(conf_dir, "schedule.json")
 # Ensure the user configuration directory exists
 if not os.path.exists(conf_dir):
     os.makedirs(conf_dir)
-
+    
 # A local cache of Degoo items and contents, to speed up successive queries for them
 # BY convention we have Degoo ID 0 as the root directory and the API returns no 
 # properties for that so we dummy some up for local use to give it the appearance 
@@ -241,7 +241,7 @@ def login():
         with open(cred_file, "w") as file:
             file.write(json.dumps({"Username": "<your Degoo username here>", "Password": "<your Degoo password here>"}))
             
-        print("No login credentials available. Please add account details to {cred_file}", file=sys.stderr)
+        print(f"No login credentials available. Please add account details to {cred_file}", file=sys.stderr)
 
 ###########################################################################
 # Bundle all the API interactions into an API class
