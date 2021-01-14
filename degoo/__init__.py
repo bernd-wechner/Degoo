@@ -44,12 +44,19 @@ command_prefix = "degoo_"
 URL_login = "https://rest-api.degoo.com/login"
 URL_API   = "https://production-appsync.degoo.com/graphql"
 
+# Get the path to user configuration diectory for this app
+conf_dir = user_config_dir("degoo")
+
 # Local config and state files
-cred_file  = os.path.join(user_config_dir("degoo"), "credentials.json")
-cwd_file   = os.path.join(user_config_dir("degoo"), "cwd.json")
-keys_file  = os.path.join(user_config_dir("degoo"), "keys.json")
-DP_file    = os.path.join(user_config_dir("degoo"), "default_properties.txt")
-sched_file = os.path.join(user_config_dir("degoo"), "schedule.json")
+cred_file  = os.path.join(conf_dir, "credentials.json")
+cwd_file   = os.path.join(conf_dir, "cwd.json")
+keys_file  = os.path.join(conf_dir, "keys.json")
+DP_file    = os.path.join(conf_dir, "default_properties.txt")
+sched_file = os.path.join(conf_dir, "schedule.json")
+
+# Ensure the user configuration directory exists
+if not os.path.exists(conf_dir):
+    os.makedirs(conf_dir)
 
 # A local cache of Degoo items and contents, to speed up successive queries for them
 # BY convention we have Degoo ID 0 as the root directory and the API returns no 
