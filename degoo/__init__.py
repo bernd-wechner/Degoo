@@ -41,7 +41,7 @@ class DegooError(Exception):
 command_prefix = "degoo_"
 
 # The URLS that the Degoo API relies upon
-URL_login = "https://api.degoo.com/v1/production/login"
+URL_login = "https://rest-api.degoo.com/login"
 URL_API   = "https://production-appsync.degoo.com/graphql"
 
 # Local config and state files
@@ -201,7 +201,7 @@ def login():
     This file should be secure readable by the user concerned, as it affords
     access to that users Degoo account.
         
-    URL_login which is th URL it posts the credentials to.
+    URL_login which is the URL it posts the credentials to.
     
     The reply provides a couple of keys that must be provided with each subsequent
     API call, as authentication, to prove we're logged in. These are written in JSON
