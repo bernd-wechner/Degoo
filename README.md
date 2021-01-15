@@ -61,21 +61,21 @@ Not implemented yet:
 This is a work in progress (WIP) still and may or may not work well. Works for me ;-). But here are some quick tips if you're wanting to try it.
 
 * The core of it is all implemented in two files:
-** `degoo/__init__.py` which provides all the basic functions needed
-** `commands.py` which implements a command line tool (that is sesnitive to its name)
+    * `degoo/__init__.py` which provides all the basic functions needed
+    * `commands.py` which implements a command line tool (that is sesnitive to its name)
 
 * To build the command line tools there:
-** `build.py` - which just creates a pile of links to `commands.py` named as a command line tools. That's a dirty trick of sorts I used to give me a pile of CLI commands to work with so I can write bash scripts etc.
+    * `build.py` - which just creates a pile of links to `commands.py` named as a command line tools. That's a dirty trick of sorts I used to give me a pile of CLI commands to work with so I can write bash scripts etc.
 
 * There's no system installer yet, it's all working in the lcoal dir as I work on it. I haven't yet put this to use as a serious backup strategy and am working on some areas to get there (slowly, when time permits)
 
 * If you want to debug, personally I can't recommend Eclipse+PyDev more highly, that's what I use. PyCharm is popular but freemium, might be easier to get started with.
 
 * If you're wanting to look at how it's been engineered:
-** Surf to degoo.com in Firefox or Chrome
-** Open the Developer tools (F12)
-** Click the Network tab
-** Log in to degoo and watch the traffic. 
-** You can save all that into text files and then start diagnosing. 
+    * Surf to degoo.com in Firefox or Chrome
+    * Open the Developer tools (F12)
+    * Click the Network tab
+    * Log in to degoo and watch the traffic. 
+    * You can save all that into text files and then start diagnosing. 
 
 * Degoo have changed the login strategy since I last touched it. Oddly, no skin of my nose as once logged in the login does not expire, that is it issues credentials that keep working, but does need fixing, and the way to do it is by watching the login traffic with Dev Tools in a browser to see what's going on. Looks like they have added an Authentikation Teken (https://github.com/bernd-wechner/Degoo/issues/1) but frankly won't know until I find time to study it.
