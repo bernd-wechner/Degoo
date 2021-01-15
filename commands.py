@@ -177,14 +177,15 @@ def main(argv=None): # IGNORE:C0111
             
             result = degoo.put(args.local, args.remote, args.verbose, not args.force, args.dryrun, args.scheduled)
             
-            if len(result) == 3:
-                ID, Path, URL = result
-                print(f"Uploaded {args.local} to {Path} with Degoo ID: {ID} and Download URL\n{URL}")
-            elif len(result) == 2:
-                ID, Path  = result
-                print(f"Uploaded {args.local} to {Path} with Degoo ID: {ID}")
-            else:
-                print(f"WARNING: Cannot upload {args.local}, it is not a File or Directory.")
+            if not args.dryrun:
+                if len(result) == 3:
+                    ID, Path, URL = result
+                    print(f"Uploaded {args.local} to {Path} with Degoo ID: {ID} and Download URL\n{URL}")
+                elif len(result) == 2:
+                    ID, Path  = result
+                    print(f"Uploaded {args.local} to {Path} with Degoo ID: {ID}")
+                else:
+                    print(f"WARNING: Cannot upload {args.local}, it is not a File or Directory.")
             
         elif command == P+"login":
             success = degoo.login()

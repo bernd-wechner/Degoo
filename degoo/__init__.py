@@ -697,14 +697,14 @@ class API:
         
         :param degoo_id: The ID of a Degoo item to delete.
         '''
-        func = f"setDeleteFile5(Token: $Token, IsPermanent: $IsPermanent, IDs: $IDs)"
-        query = f"mutation SetDeleteFile5($Token: String!, $IsPermanent: Boolean!, $IDs: [IDType]!) {{ {func} }}"
+        func = f"setDeleteFile5(Token: $Token, IsInRecycleBin: $IsInRecycleBin, IDs: $IDs)"
+        query = f"mutation SetDeleteFile5($Token: String!, $IsInRecycleBin: Boolean!, $IDs: [IDType]!) {{ {func} }}"
     
         request = { "operationName": "SetDeleteFile5",
                     "variables": {
                         "Token": self.KEYS["Token"],
                         "IDs": [{ "FileID": degoo_id }],
-                        "IsPermanent": False,
+                        "IsInRecycleBin": False,
                         },
                     "query": query
                    }
@@ -727,7 +727,7 @@ class API:
         else:
             raise DegooError(f"setDeleteFile5 failed with: {response}")
 
-    def setUploadFile2(self, name, parent_id, size="0", checksum="CgAQAg"):
+    def setUploadFile3(self, name, parent_id, size="0", checksum="CgAQAg"):
         '''
         A Degoo Graph API call: Appears to create a file in the Degoo filesystem. 
         
@@ -735,9 +735,9 @@ class API:
         on the Degoo filesystem at all, just their metadata is, the actual file contents
         are stored on a Google Cloud Service. 
         
-        To Add a file means to call getBucketWriteAuth2 to start the process, then
+        To Add a file means to call getBucketWriteAuth4 to start the process, then
         upload the file content, then finally, create the Degoo file item that then 
-        points to the actual file data with a URL. setUploadFile2 does not return 
+        points to the actual file data with a URL. setUploadFile3 does not return 
         that UTL, but getOverlay3 does.
         
         :param name:        The name of the file
@@ -745,8 +745,8 @@ class API:
         :param size:        The files size
         :param checksum:    The files checksum (see self.check_sum)
         '''
-        func = f"setUploadFile2(Token: $Token, FileInfos: $FileInfos)"
-        query = f"mutation SetUploadFile2($Token: String!, $FileInfos: [FileInfoUpload2]!) {{ {func} }}"
+        func = f"setUploadFile3(Token: $Token, FileInfos: $FileInfos)"
+        query = f"mutation SetUploadFile3($Token: String!, $FileInfos: [FileInfoUpload3]!) {{ {func} }}"
     
         # The size is 0 and checksum is "CgAQAg" when creating folders. 
         #    This seems consistent.
@@ -759,7 +759,7 @@ class API:
         # like a hardcoded string, and then prefixing it and appending it with some
         # metadata and then encoding it base64. Phew. Hence we leave it to the caller 
         # to provide the checksum.
-        request = { "operationName": "SetUploadFile2",
+        request = { "operationName": "SetUploadFile3",
                     "variables": {
                         "Token": self.KEYS["Token"],
                         "FileInfos": [{
@@ -792,7 +792,7 @@ class API:
                 for error in rd["errors"]:
                     messages.append(error["message"])
                 message = '\n'.join(messages)
-                raise DegooError(f"setUploadFile2 failed with: {message}")
+                raise DegooError(f"setUploadFile3 failed with: {message}")
             else:
                 contents = self.getFileChildren3(parent_id)
                 ids = {f["Name"]: int(f["ID"]) for f in contents}
@@ -802,9 +802,9 @@ class API:
                 return ids[name]
         
         else:
-            raise DegooError(f"setUploadFile2 failed with: {response}")
+            raise DegooError(f"setUploadFile3 failed with: {response}")
         
-    def getBucketWriteAuth2(self, dir_id):
+    def getBucketWriteAuth4(self, dir_id):
         '''
         A Degoo Graph API call: Appears to kick stat the file upload process.
         
@@ -815,10 +815,10 @@ class API:
         '''
         kv = " {Key Value __typename}"
         args = "\n".join(["PolicyBase64", "Signature", "BaseURL", "KeyPrefix", "AccessKey"+kv, "ACL",  "AdditionalBody"+kv, "__typename"])
-        func = f"getBucketWriteAuth2(Token: $Token, ParentID: $ParentID, StorageUploadInfos: $StorageUploadInfos) {{ {args} }}"
-        query = f"query GetBucketWriteAuth2($Token: String!, $ParentID: String!, $StorageUploadInfos: [StorageUploadInfo]) {{ {func} }}"
+        func = f"getBucketWriteAuth4(Token: $Token, ParentID: $ParentID, StorageUploadInfos: $StorageUploadInfos) {{ AuthData {{ {args} }} }}"
+        query = f"query GetBucketWriteAuth4($Token: String!, $ParentID: String!, $StorageUploadInfos: [StorageUploadInfo2]) {{ {func} }}"
         
-        request = { "operationName": "GetBucketWriteAuth2",
+        request = { "operationName": "GetBucketWriteAuth4",
                     "variables": {
                         "Token": self.KEYS["Token"],
                         "ParentID": f"{dir_id}",
@@ -839,14 +839,14 @@ class API:
                 for error in rd["errors"]:
                     messages.append(error["message"])
                 message = '\n'.join(messages)
-                raise DegooError(f"getBucketWriteAuth2 failed with: {message}")
+                raise DegooError(f"getBucketWriteAuth4 failed with: {message}")
             else:
                 # The index 0 suggests maybe if we upload multiple files we get_file mutipple WriteAuths back
-                RD = rd["data"]["getBucketWriteAuth2"][0]
+                RD = rd["data"]["getBucketWriteAuth4"][0]
                 
                 return RD
         else:
-            raise DegooError(f"getBucketWriteAuth2 failed with: {response}")
+            raise DegooError(f"getBucketWriteAuth4 failed with: {response}")
 
     def getSchema(self): 
         '''
@@ -931,7 +931,7 @@ def mkdir(name, parent_id=None, verbose=0, dry_run=False):
             return ids[name]
         else:
             if not dry_run:
-                ID = api.setUploadFile2(name, parent_id)
+                ID = api.setUploadFile3(name, parent_id)
             else:
                 # Dry run, no ID created
                 ID = None 
@@ -1475,36 +1475,36 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
                 print(f"Uploading {local_file} to {dir_path}")
             # The steps involved in an upload are 4 and as follows:
             #
-            # 1. Call getBucketWriteAuth2 to get the URL and parameters we need for upload
+            # 1. Call getBucketWriteAuth4 to get the URL and parameters we need for upload
             # 2. Post to the BaseURL provided by that
-            # 3. Call setUploadFile2 to inform Degoo it worked and create the Degoo item that maps to it
+            # 3. Call setUploadFile3 to inform Degoo it worked and create the Degoo item that maps to it
             # 4. Call getOverlay3 to fetch the Degoo item this created so we can see that worked (and return the download URL)
             
             MimeTypeOfFile = magic.Magic(mime=True).from_file(local_file)
         
             #################################################################
-            ## STEP 1: getBucketWriteAuth2
+            ## STEP 1: getBucketWriteAuth4
             
             # Get the Authorisation to write to this directory
             # Provides the metdata we need for the upload   
-            result = api.getBucketWriteAuth2(dir_id)
+            result = api.getBucketWriteAuth4(dir_id)
             
             #################################################################
             ## STEP 2: POST to BaseURL
 
             # Then upload the local_file to the nominated URL
-            BaseURL = result["BaseURL"]
+            BaseURL = result["AuthData"]["BaseURL"]
         
             # We now POST to BaseURL and the body is the local_file but all these fields too
-            Signature =      result["Signature"]
-            GoogleAccessId = result["AccessKey"]["Value"]
-            CacheControl =   result["AdditionalBody"][0]["Value"]  # Only one item in list not sure why indexed
-            Policy =         result["PolicyBase64"]
-            ACL =            result["ACL"]
-            KeyPrefix =      result["KeyPrefix"]  # Has a trailing / 
+            Signature =      result["AuthData"]["Signature"]
+            GoogleAccessId = result["AuthData"]["AccessKey"]["Value"]
+            CacheControl =   result["AuthData"]["AdditionalBody"][0]["Value"]  # Only one item in list not sure why indexed
+            Policy =         result["AuthData"]["PolicyBase64"]
+            ACL =            result["AuthData"]["ACL"]
+            KeyPrefix =      result["AuthData"]["KeyPrefix"]  # Has a trailing / 
             
             # This one is a bit mysterious. The Key seems to be made up of 4 parts
-            # separated by /. The first two are provided by getBucketWriteAuth2 as
+            # separated by /. The first two are provided by getBucketWriteAuth4 as
             # as the KeyPrefix, the next appears to be the local_file extension, and the 
             # last an apparent filename that is consctucted as checksum.extension.
             # Odd, to say the least.
@@ -1559,10 +1559,10 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 #                 # with two caveats:
 #                 #
 #                 # The expiry time is a little different. It's 14 days from now all right but
-#                 # now being when setUploadFile2 on the server has as now and not the now we have 
+#                 # now being when setUploadFile3 on the server has as now and not the now we have 
 #                 # here.
 #                 #
-#                 # The Signature is new, it's NOT the Signature that getBucketWriteAuth2 returned
+#                 # The Signature is new, it's NOT the Signature that getBucketWriteAuth4 returned
 #                 # nor any obvious variation upon it (like base64 encoding)
 #                 #
 #                 # After some testing it's clear that the signature is a base64 encoded signature 
@@ -1581,7 +1581,7 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 #                 #
 #                 # That is the Signature provided needs signing using the Degoo private key. 
 #                 #
-#                 # I'd bet that setUploadFile2 given he checksum can build that string and
+#                 # I'd bet that setUploadFile3 given he checksum can build that string and
 #                 # using the Degoo private key generate a signature. But alas it doestn't 
 #                 # return one and so we need to use getOverlay3 to fetch it explicitly.
 #                 expiry = str(int((datetime.datetime.utcnow() + datetime.timedelta(days=14)).timestamp()))
@@ -1594,9 +1594,9 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 #                             "&use-cf-cache=true"]) # @UnusedVariable
 
                 #################################################################
-                ## STEP 3: setUploadFile2
+                ## STEP 3: setUploadFile3
                 
-                degoo_id = api.setUploadFile2(os.path.basename(local_file), dir_id, Size, Checksum)
+                degoo_id = api.setUploadFile3(os.path.basename(local_file), dir_id, Size, Checksum)
 
                 #################################################################
                 ## STEP 4: getOverlay3
