@@ -77,5 +77,3 @@ This is a work in progress (WIP) still and may or may not work well. Works for m
     * Click the Network tab
     * Log in to degoo and watch the traffic. 
     * You can save all that into text files and then start diagnosing. 
-
-* Degoo have changed the login strategy since I last touched it. Oddly, no skin of my nose as once logged in the login does not expire, that is it issues credentials that keep working, but does need fixing, and the way to do it is by watching the login traffic with Dev Tools in a browser to see what's going on. Looks like they have added an Authentikation Teken (https://github.com/bernd-wechner/Degoo/issues/1) but frankly won't know until I find time to study it.
