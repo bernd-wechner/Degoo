@@ -243,6 +243,12 @@ def login():
             
         print(f"No login credentials available. Please add account details to {cred_file}", file=sys.stderr)
 
+    if os.path.isfile(DP_file):
+        print("File default_properties.txt found in user configuration directory! Proceeding...")
+    else:
+        with open(DP_file, "w") as file:
+            file.write("ID\nMetadataID\nUserID\nDeviceID\nMetadataKey\nName\nFilePath\nLocalPath\nLastUploadTime\nLastModificationTime\nParentID\nCategory\nSize\nPlatform\nDistance\nURL\nOptimizedURL\nThumbnailURL\nCreationTime\nIsSelfLiked\nLikes\nIsHidden\nIsInRecycleBin\nDescription\nCountry\nProvince\nPlace\nLocation\nGeoLocation {Latitude Longitude __typename}\nData\nDataBlock\nCompressionParameters\nIsShared\nShareTime\n__typename")
+
 ###########################################################################
 # Bundle all the API interactions into an API class
 
