@@ -20,6 +20,7 @@ those communications aand a Python client implementation.
 from appdirs import user_config_dir
 from urllib import request
 from dateutil import parser, tz
+from shutil import copyfile
 import os, sys, csv, json, time, datetime, requests, wget, magic, humanize, humanfriendly, hashlib, base64
 
 # An Error class for Degoo functions to raise if need be
@@ -244,10 +245,9 @@ def login():
         print(f"No login credentials available. Please add account details to {cred_file}", file=sys.stderr)
 
     if os.path.isfile(DP_file):
-        print("File default_properties.txt found in user configuration directory! Proceeding...")
-    else:
-        with open(DP_file, "w") as file:
-            file.write("ID\nMetadataID\nUserID\nDeviceID\nMetadataKey\nName\nFilePath\nLocalPath\nLastUploadTime\nLastModificationTime\nParentID\nCategory\nSize\nPlatform\nDistance\nURL\nOptimizedURL\nThumbnailURL\nCreationTime\nIsSelfLiked\nLikes\nIsHidden\nIsInRecycleBin\nDescription\nCountry\nProvince\nPlace\nLocation\nGeoLocation {Latitude Longitude __typename}\nData\nDataBlock\nCompressionParameters\nIsShared\nShareTime\n__typename")
+        pass
+    elif os.path.isfile("default_properties.txt"):
+        copyfile("default_properties.txt", DP_file)
 
 ###########################################################################
 # Bundle all the API interactions into an API class
