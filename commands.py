@@ -190,7 +190,7 @@ def main(argv=None): # IGNORE:C0111
         elif command == P+"login":
             success = degoo.login()
             if success:
-                print("Successfuly logged in.")
+                print("Successfully logged in.")
             else:
                 print("Login failed.")
 
