@@ -20,6 +20,7 @@ those communications aand a Python client implementation.
 from appdirs import user_config_dir
 from urllib import request
 from dateutil import parser, tz
+from shutil import copyfile
 import os, sys, csv, json, time, datetime, requests, wget, magic, humanize, humanfriendly, hashlib, base64
 
 # An Error class for Degoo functions to raise if need be
@@ -242,6 +243,13 @@ def login():
             file.write(json.dumps({"Username": "<your Degoo username here>", "Password": "<your Degoo password here>"}))
             
         print(f"No login credentials available. Please add account details to {cred_file}", file=sys.stderr)
+
+    if not os.path.isfile(DP_file):
+        source_file = os.path.basename(DP_file)
+        if os.path.isfile(source_file):
+            copyfile(source_file, DP_file)
+        else:
+            print(f"No properties are configured or available. If you can find the supplied file '{source_file}' copy it to '{DP_file}' and try again.")
 
 ###########################################################################
 # Bundle all the API interactions into an API class
