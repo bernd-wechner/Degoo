@@ -37,6 +37,6 @@ if os.getcwd() == cwd:
             pass
         
     # TODO: Copy default_properties to config dir.
-    # TODO: Create test_data folder if it doens't exist
+    # TODO: Create test_data folder if it doesn't exist
 else:
     print("Weirdness happened!")

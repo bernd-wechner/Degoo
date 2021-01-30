@@ -363,19 +363,30 @@ class API:
 
         :returns:               A tuple of 3 strings.        
         '''
-        # Add a set of Human Readable timestamps
-        c_time = creation
-        m_secs = int(modification)/1000
-        u_secs = int(upload)/1000
-        
-        c_datetime = parser.parse(c_time)
-        m_datetime = datetime.datetime.utcfromtimestamp(m_secs)
-        u_datetime = datetime.datetime.utcfromtimestamp(u_secs)
-
         date_format = "%Y-%m-%d %H:%M:%S"
-        c_dt = c_datetime.strftime(date_format)
-        m_dt = m_datetime.strftime(date_format)
-        u_dt = u_datetime.strftime(date_format)
+        no_date = "Unavailable"
+
+        # Add a set of Human Readable timestamps
+        if creation:
+            c_time = creation
+            c_datetime = parser.parse(c_time)
+            c_dt = c_datetime.strftime(date_format)
+        else:
+            c_dt = no_date
+        
+        if modification:
+            m_secs = int(modification)/1000
+            m_datetime = datetime.datetime.utcfromtimestamp(m_secs)
+            m_dt = m_datetime.strftime(date_format)
+        else:
+            m_dt = no_date
+
+        if upload:
+            u_secs = int(upload)/1000
+            u_datetime = datetime.datetime.utcfromtimestamp(u_secs)
+            u_dt = u_datetime.strftime(date_format)
+        else:
+            u_dt = no_date
         
         return (c_dt, m_dt, u_dt)        
     
