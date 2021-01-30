@@ -379,7 +379,7 @@ class API:
             
         The upload to Google Cloud services wants a checksum for the file (for upload integrity assurance)
         
-        This appears to a base64 encoded SHA1 hash of the file. Empircially this, with a little dressing
+        This appears to a base64 encoded SHA1 hash of the file. Empirically this, with a little dressing
         appears to function. The SHA1 hash seems to use a hardcoded string as a seed (based on JS analysis)
                 
         :param filename:    The name of the file (full path so it can be read)
