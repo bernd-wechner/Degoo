@@ -60,6 +60,9 @@ Not implemented yet:
 
 This is a work in progress (WIP) still and may or may not work well. Works for me ;-). But here are some quick tips if you're wanting to try it.
 
+* Requires Python 3.9
+* Requires the python packages in requirements.txt, install them with `pip install -r requirements.txt`
+
 * The core of it is all implemented in two files:
     * `degoo/__init__.py` which provides all the basic functions needed
     * `commands.py` which implements a command line tool (that is sesnitive to its name)
