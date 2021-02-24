@@ -17,10 +17,13 @@ those communications aand a Python client implementation.
 @contact:    YndlY2huZXJAeWFob28uY29t    (base64 encoded)
 @deffield    updated: Updated
 '''
-import os, stat, degoo
+import degoo
+import os
+import stat
 
 source = "commands.py"
-commands = ["cd", "get", "ll", "login", "ls", "mkdir", "path", "props", "put", "pwd", "rm", "tree", "user", "test"]
+commands = ["cd", "get", "ll", "login", "ls", "mkdir", "path", "props", "put", "pwd", "rm", "tree", "user", "test",
+            "rename", "mv"]
 
 # Make sure the os. functions have the script dir as their working directory
 cwd = os.path.dirname(os.path.abspath(__file__))

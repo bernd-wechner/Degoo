@@ -144,3 +144,5 @@ degoo_pwd
 degoo_rm
 degoo_tree
 degoo_user
+/.idea/
+/degoo_test

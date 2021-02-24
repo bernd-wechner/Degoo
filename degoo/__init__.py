@@ -446,7 +446,88 @@ class API:
         # Finally, Degoo base64 encode is cehcksum.
         checksum = base64.b64encode(bytes(CS)).decode()
         
-        return  checksum    
+        return  checksum
+
+    def rename_file(self, file_id, new_name):
+        """
+        Rename a file or folder
+
+        :param file_id Id of file or directory
+        :param new_name: New name of file or folder
+        :return: Message with result of operation
+        """
+
+        func = f"setRenameFile(Token: $Token, FileRenames: $FileRenames)"
+        query = f"mutation SetRenameFile($Token: String!, $FileRenames: [FileRenameInfo]!) {{ {func} }}"
+
+        request = {"operationName": "SetRenameFile",
+                   "variables": {
+                       "Token": self.KEYS["Token"],
+                       "FileRenames": [{
+                           "ID": file_id,
+                           "NewName": new_name
+                       }]
+                   },
+                   "query": query
+                   }
+
+        header = {"x-api-key": self.KEYS["x-api-key"]}
+
+        response = requests.post(URL_API, headers=header, data=json.dumps(request))
+
+        if response.ok:
+            rd = json.loads(response.text)
+
+            if "errors" in rd:
+                messages = []
+                for error in rd["errors"]:
+                    messages.append(error["message"])
+                message = '\n'.join(messages)
+                raise DegooError(f"getUserInfo failed with: {message}")
+            else:
+                return rd["data"]['setRenameFile']
+        else:
+            raise DegooError(f"renameFile failed with: {response}")
+
+    def mv(self, file_id, new_parent_id):
+        """
+        Move a file or folder to new destination
+
+        :param file_id Id of file or directory
+        :param new_parent_id: Id of destination path
+        :return: Message with result of operation
+        """
+        func = f"setMoveFile(Token: $Token, Copy: $Copy, NewParentID: $NewParentID, FileIDs: $FileIDs)"
+        query = f"mutation SetMoveFile($Token: String!, $Copy: Boolean, $NewParentID: String!, $FileIDs: [String]!) {{ {func} }}"
+
+        request = {"operationName": "SetMoveFile",
+                   "variables": {
+                       "Token": self.KEYS["Token"],
+                       "NewParentID": new_parent_id,
+                       "FileIDs": [
+                           file_id
+                       ]
+                   },
+                   "query": query
+                   }
+
+        header = {"x-api-key": self.KEYS["x-api-key"]}
+
+        response = requests.post(URL_API, headers=header, data=json.dumps(request))
+
+        if response.ok:
+            rd = json.loads(response.text)
+
+            if "errors" in rd:
+                messages = []
+                for error in rd["errors"]:
+                    messages.append(error["message"])
+                message = '\n'.join(messages)
+                raise DegooError(f"getUserInfo failed with: {message}")
+            else:
+                return rd["data"]['setMoveFile']
+        else:
+            raise DegooError(f"renameFile failed with: {response}")
     
     def getUserInfo(self, humanise=True):
         '''
@@ -975,6 +1056,62 @@ def mkdir(name, parent_id=None, verbose=0, dry_run=False):
             return ID
     else:
         raise DegooError(f"mkdir: No parent_id provided.")
+
+
+def rename(path_file_folder, new_name):
+    """
+    Rename a file or folder
+
+    :param path_file_folder: Path to file or folder
+    :param new_name: New name of file or folder
+    :return: Message with result of operation
+    """
+    old_name = path_file_folder[path_file_folder.rfind('/') + 1:] if '/' in file else file
+    if old_name == new_name:
+        raise DegooError(f"rename: Old name and new name \"{new_name}\" cannot be the same")
+
+    if isinstance(path_file_folder, int):
+        file_id = path_file_folder
+    elif isinstance(path_file_folder, str):
+        file_id = path_id(path_file_folder)
+    else:
+        raise DegooError(f"rm: Illegal file: {path_file_folder}")
+
+    return api.rename_file(file_id, new_name)
+
+
+def mv(path_file_folder, new_path):
+    """
+    Move a file or folder
+
+    :param path_file_folder: Path to file or folder
+    :param new_path: New path to move the file or folder
+    :return: Message with result of operation
+    """
+    if not is_folder(new_path):
+        raise DegooError(f"mv: The target path is not a folder")
+
+    source_path = path_file_folder if is_folder(path_file_folder) else path_file_folder[:path_file_folder.rfind('/')]
+
+    if source_path == new_path:
+        raise DegooError(f"mv: The target path cannot be the same as the source path")
+
+    if isinstance(path_file_folder, int):
+        file_id = path_file_folder
+    elif isinstance(path_file_folder, str):
+        file_id = path_id(path_file_folder)
+    else:
+        raise DegooError(f"rm: Illegal file: {path_file_folder}")
+
+    if isinstance(new_path, int):
+        new_parent_id = new_path
+    elif isinstance(new_path, str):
+        new_parent_id = path_id(new_path)
+    else:
+        raise DegooError(f"rm: Illegal destination folder: {new_path}")
+
+    return api.mv(file_id, new_parent_id)
+
 
 def rm(file):
     '''
