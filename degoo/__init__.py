@@ -1066,7 +1066,7 @@ def rename(path_file_folder, new_name):
     :param new_name: New name of file or folder
     :return: Message with result of operation
     """
-    old_name = path_file_folder[path_file_folder.rfind('/') + 1:] if '/' in file else file
+    old_name = path_file_folder[path_file_folder.rfind('/') + 1:] if '/' in path_file_folder else path_file_folder
     if old_name == new_name:
         raise DegooError(f"rename: Old name and new name \"{new_name}\" cannot be the same")
 
