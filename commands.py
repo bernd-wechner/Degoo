@@ -159,16 +159,6 @@ def main(argv=None): # IGNORE:C0111
             path = degoo.rm(args.file)
             print(f"Deleted {path}")
 
-        elif command == P+"rename":
-            parser.add_argument('file', help='The file/folder/path to rename')
-            parser.add_argument('new_name', help='New name for file/folder')
-
-            args = parser.parse_args()
-
-            result = degoo.rename(args.file, args.new_name)
-            message = 'success' if result else 'failed'
-            print(f"Renamed { message }")
-
         elif command == P+"mv":
             parser.add_argument('file', help='The path of file/folder to be moved')
             parser.add_argument('destination_path', help='Path where the file or directory will be moved')

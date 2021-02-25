@@ -1058,59 +1058,68 @@ def mkdir(name, parent_id=None, verbose=0, dry_run=False):
         raise DegooError(f"mkdir: No parent_id provided.")
 
 
-def rename(path_file_folder, new_name):
-    """
-    Rename a file or folder
-
-    :param path_file_folder: Path to file or folder
-    :param new_name: New name of file or folder
-    :return: Message with result of operation
-    """
-    old_name = path_file_folder[path_file_folder.rfind('/') + 1:] if '/' in path_file_folder else path_file_folder
-    if old_name == new_name:
-        raise DegooError(f"rename: Old name and new name \"{new_name}\" cannot be the same")
-
-    if isinstance(path_file_folder, int):
-        file_id = path_file_folder
-    elif isinstance(path_file_folder, str):
-        file_id = path_id(path_file_folder)
-    else:
-        raise DegooError(f"rm: Illegal file: {path_file_folder}")
-
-    return api.rename_file(file_id, new_name)
-
-
-def mv(path_file_folder, new_path):
+def mv(source, target):
     """
     Move a file or folder
 
-    :param path_file_folder: Path to file or folder
-    :param new_path: New path to move the file or folder
+    :param source: Path to file or folder
+    :param target: New path, or name, to move the file or folder
     :return: Message with result of operation
     """
-    if not is_folder(new_path):
-        raise DegooError(f"mv: The target path is not a folder")
+    if is_folder(source) and not is_folder(target):
+        raise DegooError(f"mv: Cannot move a directory to a file")
 
-    source_path = path_file_folder if is_folder(path_file_folder) else path_file_folder[:path_file_folder.rfind('/')]
+    if is_folder(source):
+        source_path = source
+        source_filename = None
+    else:
+        source_path = source[:source.rfind('/')]
+        source_filename = source[source.rfind('/') + 1:]
 
-    if source_path == new_path:
+    try:
+        destination_path_is_folder = is_folder(target)
+    except DegooError:
+        destination_path_is_folder = False
+
+    if destination_path_is_folder:
+        destination_path = target
+        destination_filename = None
+    elif '/' in target:
+        destination_path = target[:target.rfind('/')]
+        destination_filename = target[target.rfind('/') + 1:]
+    else:
+        destination_path = source_path
+        destination_filename = target
+
+    if source_path == destination_path and source_filename is None:
         raise DegooError(f"mv: The target path cannot be the same as the source path")
+    elif source_path == destination_path and destination_filename is None:
+        raise DegooError(f"mv: Cannot move the file to the same directory with the same name")
 
-    if isinstance(path_file_folder, int):
-        file_id = path_file_folder
-    elif isinstance(path_file_folder, str):
-        file_id = path_id(path_file_folder)
+    if isinstance(source, int):
+        file_id = source
+    elif isinstance(source, str):
+        file_id = path_id(source)
     else:
-        raise DegooError(f"rm: Illegal file: {path_file_folder}")
+        raise DegooError(f"rm: Illegal file: {source}")
 
-    if isinstance(new_path, int):
-        new_parent_id = new_path
-    elif isinstance(new_path, str):
-        new_parent_id = path_id(new_path)
+    if isinstance(target, int):
+        new_parent_id = target
+    elif isinstance(target, str):
+        if source_path != destination_path:
+            new_parent_id = path_id(destination_path)
     else:
-        raise DegooError(f"rm: Illegal destination folder: {new_path}")
+        raise DegooError(f"rm: Illegal destination folder: {target}")
 
-    return api.mv(file_id, new_parent_id)
+    if source_path == destination_path:
+        result = api.rename_file(file_id, destination_filename)
+    else:
+        # If name it is different, it is a rename with move
+        if source_filename != destination_filename and destination_filename is not None:
+            api.rename_file(file_id, destination_filename)
+        result = api.mv(file_id, new_parent_id)
+
+    return result
 
 
 def rm(file):
