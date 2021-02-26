@@ -18,8 +18,10 @@ those communications aand a Python client implementation.
 @deffield    updated: Updated
 '''
 
-import sys, os, textwrap, degoo
-
+import degoo
+import os
+import sys
+import textwrap
 from argparse import ArgumentParser, HelpFormatter
 
 __all__ = []
@@ -156,6 +158,16 @@ def main(argv=None): # IGNORE:C0111
             
             path = degoo.rm(args.file)
             print(f"Deleted {path}")
+
+        elif command == P+"mv":
+            parser.add_argument('file', help='The path of file/folder to be moved')
+            parser.add_argument('destination_path', help='Path where the file or directory will be moved')
+
+            args = parser.parse_args()
+
+            result = degoo.mv(args.file, args.destination_path)
+            message = 'success' if result else 'failed'
+            print(f"Move { message }")
 
         elif command == P+"get":
             parser.add_argument('-d', '--dryrun', action='store_true', help="Show what would be uploaded but don't upload it.")
