@@ -17,11 +17,25 @@ those communications aand a Python client implementation.
 @contact:    YndlY2huZXJAeWFob28uY29t    (base64 encoded)
 @deffield    updated: Updated
 '''
-from appdirs import user_config_dir
-from urllib import request
-from dateutil import parser, tz
+import base64
+import datetime
+import hashlib
+import humanfriendly
+import humanize
+import json
+import magic
+import os
+import requests
+import sys
+import time
+import wget
 from shutil import copyfile
-import os, sys, csv, json, time, datetime, requests, wget, magic, humanize, humanfriendly, hashlib, base64
+from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
+from clint.textui.progress import Bar as ProgressBar
+
+from appdirs import user_config_dir
+from dateutil import parser, tz
+
 
 # An Error class for Degoo functions to raise if need be
 class DegooError(Exception):
@@ -1117,7 +1131,7 @@ def get_item(path=None, verbose=0, recursive=False):
             path = 0 # Root directory if nowhere else
     elif isinstance(path, str):
         abs_path = absolute_remote_path(path)
-        
+
         paths = {item["FilePath"]: item for _,item in __CACHE_ITEMS__.items()}
         
         if not recursive and abs_path in paths:
@@ -1530,7 +1544,7 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
             Type = os.path.splitext(local_file)[1][1:]
             Checksum = api.check_sum(local_file)
             
-            if Type:     
+            if Type:
                 Key = "{}{}/{}.{}".format(KeyPrefix, Type, Checksum, Type)
             else:
                 # TODO: When there is no local_file extension, the Degoo webapp uses "unknown"
@@ -1552,11 +1566,15 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
                 ('file', (os.path.basename(local_file), open(local_file, 'rb'), MimeTypeOfFile))
             ]
             
-            heads = {"ngsw-bypass": "1", "x-client-data": "CIS2yQEIpbbJAQipncoBCLywygEI97TKAQiXtcoBCO21ygEIjrrKAQ=="}
-            
             # Perform the upload
-            # TODO: Can we get a progress bar on the this? Web app has one.  
-            response = requests.post(BaseURL, files=parts, headers=heads)
+            multipart = MultipartEncoder(fields=dict(parts))
+
+            heads = {"ngsw-bypass": "1", "content-type": multipart.content_type, "content-length": str(multipart.len)}
+
+            callback = create_callback(multipart)
+            monitor = MultipartEncoderMonitor(multipart, callback)
+
+            response = requests.post(BaseURL, data=monitor, headers=heads)
 
             # We expect a 204 status result, which is silent acknowledgement of success.
             if response.ok and response.status_code == 204:
@@ -1772,6 +1790,16 @@ def tree(dir_id=0, show_times=False,_done=[]):
                 new_done = _done.copy()
                 new_done.append(ID == last_id)
                 tree(ID, show_times, new_done)
+
+
+def create_callback(encoder):
+    encoder_len = encoder.len
+    bar = ProgressBar(expected_size=encoder_len, filled_char='#', hide=False)
+
+    def callback(monitor):
+        bar.show(monitor.bytes_read)
+
+    return callback
 
 ###########################################################################
 # A Test hook
