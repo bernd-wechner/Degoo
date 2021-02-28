@@ -11,3 +11,5 @@ python3-wget @ git+https://github.com/bernd-wechner/python3-wget@e38979ffdf462a5
 requests==2.25.1
 six==1.15.0
 urllib3==1.26.2
+clint==0.5.1
+requests-toolbelt==0.9.1

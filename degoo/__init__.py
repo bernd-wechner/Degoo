@@ -1461,6 +1461,7 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
     Name = item.get("Name", None)
     Path = item.get("FilePath", None)
     Size = item.get('Size', 0)
+    Data = item.get('Data', None)
 
     # Remember the current working directory
     cwd = os.getcwd()
@@ -1520,6 +1521,10 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
                     print(f"Would NOT download {Path}")
                 else:
                     print(f"Not downloading {Path}")
+    elif Data and Name:
+        decoded_content = base64.b64decode(Data).decode("utf-8")
+        with open(dest_file, "w") as text_file:
+            text_file.write(decoded_content)
     else:
         raise DegooError(f"{Path} apparantly has no URL to download from.")
 
