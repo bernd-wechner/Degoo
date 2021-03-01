@@ -130,6 +130,7 @@ dmypy.json
 .project
 
 test_data/
+test_data2/
 
 degoo_cd
 degoo_get
@@ -144,5 +145,8 @@ degoo_pwd
 degoo_rm
 degoo_tree
 degoo_user
+
 /.idea/
 /degoo_test
+
+*.png
