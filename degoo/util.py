@@ -13,14 +13,16 @@ import getpass
 import requests
 import humanfriendly
 
-from datetime import datetime
-from dateutil import tz
 from appdirs import user_config_dir
+from datetime import datetime
+from dateutil.tz import tzutc, tzlocal
 
 from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
+# from clint.textui.progress import Bar as ProgressBar
 
 from .API import API
 from .lib import ddd, split_path, absolute_remote_path
+from sqlalchemy.sql.expression import except_
 
 ###########################################################################
 # Get the path to user configuration diectory for this app
@@ -95,7 +97,19 @@ __CACHE_ITEMS__ = {0: {
                         }
                     }
 
+# A cache of directory contents
 __CACHE_CONTENTS__ = {}
+
+
+def decache(degoo_id):
+    '''
+    Removed an item from the cahce store, thus forcing it to be refetched from
+    Degoo when next needed.
+
+    :param degoo_id: The ID of a degoo item/object
+    '''
+    __CACHE_ITEMS__.pop(degoo_id, None)
+    __CACHE_CONTENTS__.pop(degoo_id, None)
 
 ###########################################################################
 # Scheduling functions
@@ -104,11 +118,11 @@ __CACHE_CONTENTS__ = {}
 def wait_until_next(time_of_day, verbose=0):
     '''
     Wait until the specified time. Uses Python sleep() which uses no CPU as rule
-    and works on a basis liek Zeno's dichotomy paradox, by sleeping to the half 
+    and works on a basis liek Zeno's dichotomy paradox, by sleeping to the half
     way point in successive trials unil we're with 0.1 second of the target.
-    
-    Used herein for scheduling uploads and downloads.  
-     
+
+    Used herein for scheduling uploads and downloads.
+
     :param time_of_day: A time of day as time.time_struct.
     '''
     now = time.localtime()
@@ -158,8 +172,8 @@ def userinfo():
 def mkpath(path, verbose=0):
     '''
     Analagous to Linux "mkdir -p", creating all necessary parents along the way.
-    
-    :param name: A name or path. If it starts with {os.sep} it's interpreted 
+
+    :param name: A name or path. If it starts with {os.sep} it's interpreted
                  from root if not it's interpreted from CWD.
     '''
     dirs = split_path(path)
@@ -175,13 +189,13 @@ def mkpath(path, verbose=0):
         if d:
             current_dir = mkdir(d, current_dir, verbose)
 
-    return get_item(current_dir)["FilePath"]
+    return current_dir
 
 
 def mkdir(name, parent_id=None, verbose=0, dry_run=False):
     '''
     Makes a Degoo directory/folder or device
-    
+
     :param name: The name of a directory/folder to make in the CWD or nominated (by id) parent
     :param parent_id: Optionally a the degoo ID of a parent. If not specified the CWD is used.
     '''
@@ -208,92 +222,128 @@ def mkdir(name, parent_id=None, verbose=0, dry_run=False):
 
             return ID
     else:
-        raise DegooError(f"mkdir: No parent_id provided.")
+        raise DegooError("mkdir: No parent_id provided.")
 
 
 def mv(source, target):
-    """
+    '''
     Move a file or folder
 
     :param source: Path to file or folder
     :param target: New path, or name, to move the file or folder
     :return: Message with result of operation
-    """
-    if is_folder(source) and not is_folder(target):
-        raise DegooError(f"mv: Cannot move a directory to a file")
+    '''
+    if source == target:
+        raise DegooError(f"mv: Cannot move {source} to itself")
 
-    if is_folder(source):
-        source_path = source
-        source_filename = None
+    source_folder, source_name = os.path.split(source)
+    target_folder, target_name = os.path.split(target)
+
+    # If target is a folder move the source into the target folder with same name
+    if exists(target):
+        if is_folder(target):
+            target_folder = target
+            target_name = source_name
+        else:
+            raise DegooError(f"mv: Cannot move {source} to {target} (an existing file)")
+
+    # If no folder is specified use the current working directory
+    if not source_folder:
+        source_folder = CWD['Path']
+
+    if not target_folder:
+        target_folder = CWD['Path']
+
+    # If moving a file in the same directory we need both a source and target filename
+    if source_folder == target_folder and (not source_name or not target_name):
+        raise DegooError(f"mv: Cannot move {source} to {target}")
+
+    source_id = path_id(source)
+
+    if not source_id:
+        raise DegooError(f"mv: '{source}' does not exist on the Degoo drive")
+
+    target_id = path_id(target)
+
+    if target_id:
+        # It had better be folder or we can do the move
+        if not is_folder(target):
+            raise DegooError(f"mv: '{target}' already exists as a file, cannot move {source} there.")
     else:
-        source_path = source[:source.rfind('/')]
-        source_filename = source[source.rfind('/') + 1:]
+        # There is a name the target folder is its path (parent)
+        if target_name:
+            target_id = path_id(target_folder)
+            if not target_id:
+                target_id = mkpath(target_folder)
+        # If target is a folder make sure it exists
+        else:
+            target_id = mkpath(target)
 
-    try:
-        destination_path_is_folder = is_folder(target)
-    except DegooError:
-        destination_path_is_folder = False
+        if not target_id:
+            raise DegooError(f"mv: '{target}' does not exist and could not be created on the Degoo drive")
 
-    if destination_path_is_folder:
-        destination_path = target
-        destination_filename = None
-    elif '/' in target:
-        destination_path = target[:target.rfind('/')]
-        destination_filename = target[target.rfind('/') + 1:]
+    if source_folder == target_folder:
+        source_id = api.setRenameFile(source_id, target_name)
     else:
-        destination_path = source_path
-        destination_filename = target
+        renamed = False
+        if not target_name == source_name:
+            # This poses a slight problem.
+            # We know the new name does not exist in the new folder
+            #    That is tested above and we bail as we don't want to overwrite a target file.
+            #    TODO: Couldhave a command line flag -f to force such an overwrite.
+            # the new name does not exist in the old folder we can rename first then move
+            intermediate = os.path.join(source_folder, target_name)
+            intermediate_id = path_id(intermediate)
+            if not intermediate_id:
+                # Rename it before moving
+                source_id = api.setRenameFile(source_id, target_name)
+                target_id = path_id(target_folder)
 
-    if source_path == destination_path and source_filename is None:
-        raise DegooError(f"mv: The target path cannot be the same as the source path")
-    elif source_path == destination_path and destination_filename is None:
-        raise DegooError(f"mv: Cannot move the file to the same directory with the same name")
+                if not (source_id and target_id):
+                    raise DegooError(f"mv: Unidentified error trying to move '{source}' to '{intermediate}' in preapration for mooving it to '{target_folder}'")
+                else:
+                    renamed = True
 
-    if isinstance(source, int):
-        file_id = source
-    elif isinstance(source, str):
-        file_id = path_id(source)
-    else:
-        raise DegooError(f"rm: Illegal file: {source}")
+        source_id = api.setMoveFile(source_id, target_id)
 
-    if isinstance(target, int):
-        new_parent_id = target
-    elif isinstance(target, str):
-        if source_path != destination_path:
-            new_parent_id = path_id(destination_path)
-    else:
-        raise DegooError(f"rm: Illegal destination folder: {target}")
+        if not target_name == source_name and not renamed:
+            # Means that the intermediate above existed in the source folder
+            # So we try with an intermediate in the target folder
+            intermediate = os.path.join(target_folder, source_name)
+            intermediate_id = path_id(intermediate)
+            if not intermediate_id:
+                source_id = path_id(intermediate)
 
-    if source_path == destination_path:
-        result = api.setRenameFile(file_id, destination_filename)
-    else:
-        # If name it is different, it is a rename with move
-        if source_filename != destination_filename and destination_filename is not None:
-            api.setRenameFile(file_id, destination_filename)
-        result = api.setMoveFile(file_id, new_parent_id)
+                if not (source_id and target_name):
+                    raise DegooError(f"mv: Unidentified error trying to move '{source}' to '{intermediate}' in preapration for mooving it to '{target_folder}'")
+                else:
 
-    return result
+                    # Rename it before moving
+                    api.setRenameFile(source_id, target_name)
+
+    # Remove it from cache as the cached FilePath is now wrong for this object
+    decache(source_id)
+
+    return source_id
 
 
 def rm(file):
     '''
     Deletes (Removes) a nominated file from the Degoo filesystem.
-    
+
     Unless the remote server deletes the actual file content from the cloud server this is not
     secure of course. In fact it supports trash and removing the file or folder, moves it to
     the Recycle Bin.
-         
+
     :param file: Either a string which specifies a file or an int which provides A Degoo ID.
     '''
-    if isinstance(file, int):
-        file_id = file
-    elif isinstance(file, str):
-        file_id = path_id(file)
-    else:
+    file_id = path_id(file)
+
+    if not file_id:
         raise DegooError(f"rm: Illegal file: {file}")
 
     path = api.getOverlay3(file_id)["FilePath"]
-    response = api.setDeleteFile5(file_id)  # @UnusedVariable
+    api.setDeleteFile5(file_id)  # @UnusedVariable
 
     return path
 
@@ -301,8 +351,8 @@ def rm(file):
 def cd(path):
     '''
     Change the current working directory (in the Degoo filesystem)
-    
-    :param path: an absolute or relative path. 
+
+    :param path: an absolute or relative path.
     '''
     CWD = get_dir(path)
     with open(cwd_file, "w") as file:
@@ -313,12 +363,12 @@ def cd(path):
 def device_names():
     '''
     Returns a dictionary of devices, keyed on Degoo ID, containing the name of the device.
-    
+
     Top level folders in the Degoo Filesystem are called devices.
-    
-    TODO: Degoo's web interface does not currently allow creation of devices even when licensed to. 
-    Thus we have no way of working out an API call that does so and we're stuck with devices they 
-    give us (even when licensed to have as many as you like). 
+
+    TODO: Degoo's web interface does not currently allow creation of devices even when licensed to.
+    Thus we have no way of working out an API call that does so and we're stuck with devices they
+    give us (even when licensed to have as many as you like).
     '''
     devices = {}
     root = get_children(0)
@@ -331,8 +381,8 @@ def device_names():
 def device_ids():
     '''
     Returns a dictionary of devices, keyed on name, containing the Degoo ID of the device.
-    
-    Top level folders in the Degoo Filesystem are called devices.    
+
+    Top level folders in the Degoo Filesystem are called devices.
     '''
     devices = {}
     root = get_children(0)
@@ -345,9 +395,9 @@ def device_ids():
 def get_dir(path=None):
     '''
     Returns a Degoo Directory Dictionary (ddd) for the specified directory.
-    
-    Is impartial actually, and works for Files and Folders alike. 
-    
+
+    Is impartial actually, and works for Files and Folders alike.
+
     :param path: The path (absolute or relative) of a Degoo item. If not specified returns the current working directory.
     '''
     if path:
@@ -364,15 +414,20 @@ def get_dir(path=None):
 def get_parent(degoo_id):
     '''
     Given the Degoo ID returns the Degoo Directory Dictionary (ddd) for the parent directory.
-    
+
     :param degoo_id: The Degoo ID of an item.
     '''
-    props = get_item(degoo_id)
-    parent = props.get("ParentID", None)
+    try:
+        parent = get_item(degoo_id)["ParentID"]
+    except:
+        parent = None
 
     if not parent is None:
-        parent_props = get_item(parent)
-        return ddd(parent_props.get("ID", None), parent_props.get("FilePath", None))
+        try:
+            props = get_item(parent)
+            return ddd(props.get("ID", None), props.get("FilePath", None))
+        except:
+            return None
     else:
         return None
 
@@ -380,49 +435,68 @@ def get_parent(degoo_id):
 def path_str(degoo_id):
     '''
     Returns the FilePath property of a Degoo item.
-    
+
     :param degoo_id: The Degoo ID of the item.
     '''
-    props = get_item(degoo_id)
-    return props.get("FilePath", None)
+    try:
+        return get_item(degoo_id)["FilePath"]
+    except:
+        return None
 
 
 def parent_id(degoo_id):
     '''
     Returns the Degoo ID of the parent of a Degoo Item.
-     
+
     :param degoo_id: The Degoo ID of the item concerned.
     '''
-    props = get_item(degoo_id)
-    return props.get("ParentID", None)
+    try:
+        return get_item(degoo_id)["ParentID"]
+    except:
+        return None
 
 
 def path_id(path):
     '''
-    Returns the Degoo ID of the object at path (Folder or File, or whatever). 
-    
+    Returns the Degoo ID of the object at path (Folder or File, or whatever).
+
     If an int is passed just returns that ID but if a str is passed finds the ID and returns it.
-    
+
     if no path is specified returns the ID of the Current Working Directory (CWD).
-    
+
     :param path: An int or str or None (which ask for the current working directory)
     '''
-    return get_item(path)["ID"]
+    try:
+        return get_item(path)["ID"]
+    except:
+        return None
+
+
+def exists(path):
+    '''
+    Does the remote path exist on the Degoo drive?
+
+    :param path: An int or str or None (which ask for the current working directory)
+    '''
+    return not path_id(path) is None
 
 
 def is_folder(path):
     '''
     Returns true if the remote Degoo item referred to by path is a Folder
-    
+
     :param path: An int or str or None (for the current working directory)
     '''
-    return get_item(path)["CategoryName"] in api.folder_types
+    try:
+        return get_item(path)["CategoryName"] in api.folder_types
+    except:
+        return False
 
 
 def get_item(path=None, verbose=0, recursive=False):
     '''
     Return the property dictionary representing a nominated Degoo item.
-    
+
     :param path: An int or str or None (for the current working directory)
     '''
 
@@ -505,12 +579,12 @@ def get_item(path=None, verbose=0, recursive=False):
 
 def get_children(directory=None):
     '''
-    Returns a list of children (as a property dictionary) of a dominated directory. 
-     
-    :param directory: The path (absolute of relative) of a Folder item, 
-                        the property dictionary representing a Degoo Folder or 
-                        None for the current working directory, 
-    
+    Returns a list of children (as a property dictionary) of a dominated directory.
+
+    :param directory: The path (absolute of relative) of a Folder item,
+                        the property dictionary representing a Degoo Folder or
+                        None for the current working directory,
+
     :returns: A list of property dictionaries, one for each child, contianing the properties of that child.
     '''
     if directory is None:
@@ -540,17 +614,17 @@ def get_children(directory=None):
 def has_changed(local_filename, remote_path, verbose=0):
     '''
     Determines if a local local_filename has changed since last upload.
-     
+
     :param local_filename: The local local_filename ((full or relative remote_path)
     :param remote_path:    The Degoo path it was uploaded to (can be a Folder or a File, either relative or abolute remote_path)
     :param verbose:        Print useful tracking/diagnostic information
-    
+
     :returns: True if local local_filename has chnaged since last upload, false if not.
     '''
     # We need the local local_filename name, size and last modification time
     Name = os.path.basename(local_filename)
     Size = os.path.getsize(local_filename)
-    LastModificationTime = datetime.fromtimestamp(os.path.getmtime(local_filename)).astimezone(tz.tzlocal())
+    LastModificationTime = datetime.fromtimestamp(os.path.getmtime(local_filename)).astimezone(tzlocal())
 
     # Get the files' properties either from the folder it's in or the file itself
     # Depending on what was specified in remote_path (the containing folder or the file)
@@ -562,19 +636,19 @@ def has_changed(local_filename, remote_path, verbose=0):
 
         if Name in sizes:
             Remote_Size = sizes[Name]
-            LastUploadTime = datetime.utcfromtimestamp(int(times[Name]) / 1000).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
+            LastUploadTime = datetime.utcfromtimestamp(int(times[Name]) / 1000).replace(tzinfo=tzutc()).astimezone(tzlocal())
         else:
             Remote_Size = 0
-            LastUploadTime = datetime.utcfromtimestamp(0).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
+            LastUploadTime = datetime.utcfromtimestamp(0).replace(tzinfo=tzutc()).astimezone(tzlocal())
     else:
         props = get_item(remote_path)
 
         if props:
             Remote_Size = props["Size"]
-            LastUploadTime = datetime.utcfromtimestamp(int(props["LastUploadTime"]) / 1000).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
+            LastUploadTime = datetime.utcfromtimestamp(int(props["LastUploadTime"]) / 1000).replace(tzinfo=tzutc()).astimezone(tzlocal())
         else:
             Remote_Size = 0
-            LastUploadTime = datetime.utcfromtimestamp(0).replace(tzinfo=tz.UTC).astimezone(tz.tzlocal())
+            LastUploadTime = datetime.utcfromtimestamp(0).replace(tzinfo=tzutc()).astimezone(tzlocal())
 
     if verbose > 0:
         print(f"{local_filename}: ")
@@ -590,15 +664,15 @@ def has_changed(local_filename, remote_path, verbose=0):
 
 def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry_run=False, schedule=False):
     '''
-    Downloads a specified remote_file from Degoo. 
-    
+    Downloads a specified remote_file from Degoo.
+
     :param remote_file: An int or str or None (for the current working directory)
     :param local_directory: The local directory into which to drop the downloaded file
     :param verbose:    Print useful tracking/diagnostic information
     :param if_missing: Only download the remote_file if it's missing locally (i.e. don't overwrite local files)
-    :param dry_run:    Don't actually download the remote_file ... 
-    :param schedule:   Respect the configured schedule (i.e download only when schedule permits) 
-    
+    :param dry_run:    Don't actually download the remote_file ...
+    :param schedule:   Respect the configured schedule (i.e download only when schedule permits)
+
     :returns: the FilePath property of the downloaded remote_file.
     '''
     if schedule:
@@ -701,13 +775,13 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
 def get_directory(remote_folder, local_directory=None, verbose=0, if_missing=False, dry_run=False, schedule=False):
     '''
     Downloads a Directory and all its contents (recursively).
-    
+
     :param remote_folder: An int or str or None (for the current working directory)
     :param local_directory: The local directory into which to drop the downloaded folder
     :param verbose:    Print useful tracking/diagnostic information
     :param if_missing: Only download files missing locally (i.e don't overwrite local files)
-    :param dry_run:    Don't actually download the file ... 
-    :param schedule:   Respect the configured schedule (i.e download only when schedule permits) 
+    :param dry_run:    Don't actually download the file ...
+    :param schedule:   Respect the configured schedule (i.e download only when schedule permits)
     '''
     item = get_item(remote_folder)
 
@@ -765,13 +839,13 @@ def get_directory(remote_folder, local_directory=None, verbose=0, if_missing=Fal
 def get(remote_path, local_directory=None, verbose=0, if_missing=False, dry_run=False, schedule=False):
     '''
     Downloads a file or folder from Degoo.
-    
+
     :param remote_path: The file or folder (a degoo path) to download
     :param local_directory: The local directory into which to drop the download
     :param verbose:    Print useful tracking/diagnostic information
     :param if_missing: Only download the file if it's missing (i.e. don't overwrite local files)
-    :param dry_run:    Don't actually download the file ... 
-    :param schedule:   Respect the configured schedule (i.e download only when schedule permits) 
+    :param dry_run:    Don't actually download the file ...
+    :param schedule:   Respect the configured schedule (i.e download only when schedule permits)
     '''
     item = get_item(remote_path)
 
@@ -784,14 +858,14 @@ def get(remote_path, local_directory=None, verbose=0, if_missing=False, dry_run=
 def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
     '''
     Uploads a local_file to the Degoo cloud store.
-    
+
     :param local_file:     The local file ((full or relative remote_folder)
     :param remote_folder:  The Degoo folder upload it to (must be a Folder, either relative or abolute path)
     :param verbose:        Print useful tracking/diagnostic information
     :param if_changed:     Only upload the local_file if it's changed
-    :param dry_run:        Don't actually upload the local_file ... 
-    :param schedule:       Respect the configured schedule (i.e upload only when schedule permits) 
-    
+    :param dry_run:        Don't actually upload the local_file ...
+    :param schedule:       Respect the configured schedule (i.e upload only when schedule permits)
+
     :returns: A tuple containing the Degoo ID, Remote file path and the download URL of the local_file.
     '''
 
@@ -903,8 +977,8 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 
             # We expect a 204 status result, which is silent acknowledgement of success.
             if response.ok and response.status_code == 204:
-                # Theeres'a Google Upload ID returned in the headers. Not sure what use it is.
-                google_id = response.headers["X-GUploader-UploadID"]  # @UnusedVariable
+                # Theres'a Google Upload ID returned in the headers. Not sure what use it is.
+                # google_id = response.headers["X-GUploader-UploadID"]
 
                 if verbose > 1:
                     print("Google Response Headers:")
@@ -997,12 +1071,12 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
     '''
     Uploads a local directory recursively to the Degoo cloud store.
 
-    :param local_directory: The local directory (full or relative remote_folder) 
+    :param local_directory: The local directory (full or relative remote_folder)
     :param remote_folder:    The Degoo folder to upload it to (must be a Folder, either relative or abolute path)
     :param verbose: Print useful tracking/diagnostic information
-    :param if_changed: Uploads only files changed since last upload  
+    :param if_changed: Uploads only files changed since last upload
     :param dry_run: Don't actually upload anything ...
-    :param schedule:   Respect the configured schedule (i.e upload only when schedule permits) 
+    :param schedule:   Respect the configured schedule (i.e upload only when schedule permits)
 
     :returns: A tuple containing the Degoo ID and the Remote file path
     '''
@@ -1040,12 +1114,12 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
 def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
     '''
     Uplads a file or folder to the Degoo cloud store
-    
+
     :param local_path: The path (absolute or relative) of a local file or folder
     :param remote_folder: The Degoo path to upload it to (must be a Folder, either relative or absolute path)
     :param verbose: Print useful tracking/diagnostic information
-    :param if_changed: Uploads only files changed since last upload  
-    :param schedule:   Respect the configured schedule (i.e upload only when schedule permits) 
+    :param if_changed: Uploads only files changed since last upload
+    :param schedule:   Respect the configured schedule (i.e upload only when schedule permits)
     '''
     isFile = os.path.isfile(local_path)
     isDirectory = os.path.isdir(local_path)

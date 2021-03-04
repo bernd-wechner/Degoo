@@ -22,6 +22,8 @@ import degoo
 import os
 import sys
 import textwrap
+import traceback
+
 from argparse import ArgumentParser, HelpFormatter
 
 __all__ = []
@@ -29,7 +31,7 @@ __version__ = 0.1
 __date__ = '2020-06-03'
 __updated__ = '2020-06-03'
 
-DEBUG = 0
+DEBUG = 1
 TESTRUN = 0
 PROFILE = 0
 
@@ -41,7 +43,7 @@ class CLIError(Exception):
 
     def __init__(self, msg):
         super().__init__(type(self))
-        self.msg = f"Eror: {msg}"
+        self.msg = f"Error: {msg}"
 
     def __str__(self):
         return self.msg
@@ -65,6 +67,10 @@ def main(argv=None):  # IGNORE:C0111
         sys.argv.extend(argv)
 
     command = os.path.basename(sys.argv[0])
+
+    if not command.startswith(P):
+        command = sys.argv[0] = P + sys.argv[1]
+        sys.argv.pop(1)
 
     program_version = f"v{__version__}"
     program_build_date = str(__updated__)
@@ -156,7 +162,8 @@ def main(argv=None):  # IGNORE:C0111
             parser.add_argument('folder', help='The folder/path to list')
             args = parser.parse_args()
 
-            path = degoo.mkpath(args.folder)
+            ID = degoo.mkpath(args.folder)
+            path = degoo.get_item(ID)["FilePath"]
             print(f"Created folder {path}")
 
         elif command == P + "rm":
@@ -167,14 +174,21 @@ def main(argv=None):  # IGNORE:C0111
             print(f"Deleted {path}")
 
         elif command == P + "mv":
-            parser.add_argument('file', help='The path of file/folder to be moved')
-            parser.add_argument('destination_path', help='Path where the file or directory will be moved')
+            parser.add_argument('source', help='The path of file/folder to be moved')
+            parser.add_argument('target', help='Path where the file or directory will be moved')
 
             args = parser.parse_args()
 
-            result = degoo.mv(args.file, args.destination_path)
-            message = 'success' if result else 'failed'
-            print(f"Move { message }")
+            abs_from = degoo.util.path_str(args.source)
+
+            try:
+                ID = degoo.mv(args.source, args.target)
+
+                if ID:
+                    abs_to = degoo.util.path_str(ID)
+                    print(f"Moved {abs_from} to {abs_to}")
+            except Exception as e:
+                print(e)
 
         elif command == P + "get":
             parser.add_argument('-d', '--dryrun', action='store_true', help="Show what would be uploaded but don't upload it.")
@@ -232,7 +246,20 @@ def main(argv=None):  # IGNORE:C0111
         return 0
     except Exception as e:
         if DEBUG or TESTRUN:
-            raise(e)
+
+            def format_exception(e):
+                exception_list = traceback.format_stack()
+                exception_list = exception_list[:-2]
+                exception_list.extend(traceback.format_tb(sys.exc_info()[2]))
+                exception_list.extend(traceback.format_exception_only(sys.exc_info()[0], sys.exc_info()[1]))
+
+                exception_str = "Traceback (most recent call last):\n"
+                exception_str += "".join(exception_list)
+
+                return exception_str
+
+            sys.stderr.write(format_exception(e))
+
         indent = len(command) * " "
         sys.stderr.write(command + ": " + str(e) + "\n")
         sys.stderr.write(indent + "  for help use --help\n")

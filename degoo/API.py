@@ -126,15 +126,15 @@ class API:
     def __init__(self):
         '''
         Reads config and state files to intitialise the API.
-        
+
         Specifically:
-        
-            Loads authentication keys from key_file if available (the product of 
+
+            Loads authentication keys from key_file if available (the product of
             loging in)
-            
-            Loads the superset of known degoo item properties that we can ask 
+
+            Loads the superset of known degoo item properties that we can ask
             for when sending queries to the remote API.
-            
+
             Sets CATLEN to the length fo the longest CAT name.
         '''
         keys = {}
@@ -152,15 +152,15 @@ class API:
 
     def _human_readable_times(self, creation, modification, upload):
         '''
-        Given three Degoo timestamps converts them to human readable 
+        Given three Degoo timestamps converts them to human readable
         text strings. These three timestamps are provided for every
         Degoo item.
-        
-        :param creation:        The time of creation 
-        :param modification:    The time of last modifciation 
-        :param upload:          The time of last upload  
 
-        :returns:               A tuple of 3 strings.        
+        :param creation:        The time of creation
+        :param modification:    The time of last modifciation
+        :param upload:          The time of last upload
+
+        :returns:               A tuple of 3 strings.
         '''
         date_format = "%Y-%m-%d %H:%M:%S"
         no_date = "Unavailable"
@@ -194,14 +194,14 @@ class API:
         When uploading files Degoo uses a 2 step process:
             1) Get Authorisation from the Degoo API - provides metadate needed for step 2
             2) Upload the file to a nominated URL (in practice this appears to be Google Cloud Services)
-            
+
         The upload to Google Cloud services wants a checksum for the file (for upload integrity assurance)
-        
+
         This appears to a base64 encoded SHA1 hash of the file. Empirically this, with a little dressing
         appears to function. The SHA1 hash seems to use a hardcoded string as a seed (based on JS analysis)
-                
+
         :param filename:    The name of the file (full path so it can be read)
-        :param blocksize:   Optionally a block size used for reading the file 
+        :param blocksize:   Optionally a block size used for reading the file
         '''
         Seed = bytes([13, 7, 2, 2, 15, 40, 75, 117, 13, 10, 19, 16, 29, 23, 3, 36])
         Hash = hashlib.sha1(Seed)
@@ -239,12 +239,12 @@ class API:
     def devices(self):
         '''
         Returns a dictionary of devices, keyed on Degoo ID, containing the name of the device.
-        
+
         Top level folders in the Degoo Filesystem are called devices.
-        
-        TODO: Degoo's web interface does not currently allow creation of devices even when licensed to. 
-        Thus we have no way of working out an API call that does so and we're stuck with devices they 
-        give us (even when licensed to have as many as you like). 
+
+        TODO: Degoo's web interface does not currently allow creation of devices even when licensed to.
+        Thus we have no way of working out an API call that does so and we're stuck with devices they
+        give us (even when licensed to have as many as you like).
         '''
         if self.__devices__ is None:
             devices = {}
@@ -263,16 +263,16 @@ class API:
 
     def login(self, username=None, password=None):
         '''
-        Logs into a Degoo account. 
-        
+        Logs into a Degoo account.
+
         The login is lasting, i.e. does not seem to expire (not subject to any autologout)
-        
+
         The reply provides a couple of keys that must be provided with each subsequent
         API call, as authentication, to prove we're logged in. These are written in JSON
         format to keys_file which is by default: ~/.config/degoo/keys.json
-        
+
         TODO: Support logout as well (which will POST a logout request and remove these keys)
-        
+
         :returns: True if successful, False if not
         '''
         CREDS = {}
@@ -322,7 +322,7 @@ class API:
     def getUserInfo(self, humanise=True):
         '''
         A Degoo Graph API call: gets information about the logged in user.
-         
+
         :param humanise:  If true converts some properties into a human readable format.
         '''
         args = "\n".join(["Name", "Email", "Phone", "AvatarURL", "AccountType", "UsedQuota", "TotalQuota", "__typename"])
@@ -366,9 +366,9 @@ class API:
     def getOverlay3(self, degoo_id):
         '''
         A Degoo Graph API call: gets information about a degoo item identified by ID.
-        
-        A Degoo item can be a file or folder but may not be limited to that (see self.CATS). 
-         
+
+        A Degoo item can be a file or folder but may not be limited to that (see self.CATS).
+
         :param degoo_id: The ID of the degoo item.
         '''
         # args = self.PROPERTIES.replace("Size\n", "Size\nHash\n")
@@ -442,9 +442,9 @@ class API:
     def getFileChildren3(self, dir_id):
         '''
         A Degoo Graph API call: gets the contents of a Degoo directory (the children of a Degoo item that is a Folder)
-        
+
         :param dir_id: The ID of a Degoo Folder item (might work for other items too?)
-        
+
         :returns: A list of property dictionaries, one for each child, contianing the properties of that child.
         '''
         args = f"Items {{ {self.PROPERTIES} }} NextToken __typename"
@@ -482,10 +482,10 @@ class API:
                 items = rd["data"]["getFileChildren3"]["Items"]
 
                 if items:
-                    next = rd["data"]["getFileChildren3"]["NextToken"]  # @ReservedAssignment
-                    if next:
+                    next_token = rd["data"]["getFileChildren3"]["NextToken"]
+                    if next_token:
                         # TODO: Work out what to do in this case.
-                        print(f"WARNING: PAGINATION ISSUE, NextToken={next}", file=sys.stderr)
+                        print(f"WARNING: PAGINATION ISSUE, NextToken={next_token}", file=sys.stderr)
 
                     # Fix FilePath by prepending it with a Device name.and converting
                     # / to os.sep so it becomes a valid os path as well.
@@ -539,10 +539,10 @@ class API:
 
     def getFilesFromPaths(self, device_id, path=""):
         '''
-        A Degoo Graph API call: Not sure what this API call is for to be honest. 
-        
+        A Degoo Graph API call: Not sure what this API call is for to be honest.
+
         It's called after an upload for some reason. But if seems to offer nothing of value.
-        
+
         :param device_id: A Degoo device ID
         :param path:      Don't know what this is.
         '''
@@ -589,15 +589,15 @@ class API:
 
     def setDeleteFile5(self, degoo_id):
         '''
-        A Degoo Graph API call: Deletes a Degoo item identified by ID. It is moved to the Recycle Bin 
-        for the device it was on, and this is not a secure delete. It must be expolicitly deleted 
+        A Degoo Graph API call: Deletes a Degoo item identified by ID. It is moved to the Recycle Bin
+        for the device it was on, and this is not a secure delete. It must be expolicitly deleted
         from the Recylce bin to be a secure delete.
-        
-        #TODO: support an option to find and delete the file in the recycle bin,  
-        
+
+        #TODO: support an option to find and delete the file in the recycle bin,
+
         :param degoo_id: The ID of a Degoo item to delete.
         '''
-        func = f"setDeleteFile5(Token: $Token, IsInRecycleBin: $IsInRecycleBin, IDs: $IDs)"
+        func = "setDeleteFile5(Token: $Token, IsInRecycleBin: $IsInRecycleBin, IDs: $IDs)"
         query = f"mutation SetDeleteFile5($Token: String!, $IsInRecycleBin: Boolean!, $IDs: [IDType]!) {{ {func} }}"
 
         request = { "operationName": "SetDeleteFile5",
@@ -628,15 +628,15 @@ class API:
             raise self.Error(f"setDeleteFile5 failed with: {response}")
 
     def setRenameFile(self, file_id, new_name):
-        """
+        ''''
         Rename a file or folder
 
         :param file_id Id of file or directory
         :param new_name: New name of file or folder
         :return: Message with result of operation
-        """
+        '''
 
-        func = f"setRenameFile(Token: $Token, FileRenames: $FileRenames)"
+        func = "setRenameFile(Token: $Token, FileRenames: $FileRenames)"
         query = f"mutation SetRenameFile($Token: String!, $FileRenames: [FileRenameInfo]!) {{ {func} }}"
 
         request = {"operationName": "SetRenameFile",
@@ -662,11 +662,13 @@ class API:
                 for error in rd["errors"]:
                     messages.append(error["message"])
                 message = '\n'.join(messages)
-                raise self.Error(f"getUserInfo failed with: {message}")
+                raise self.Error(f"setRenameFile failed with: {message}")
+            elif 'data' in rd and rd['data'].get('setRenameFile', False):
+                return file_id  # The ID of the renamed file (its ID does not change)
             else:
-                return rd["data"]['setRenameFile']
+                raise self.Error(f"setRenameFile failed with unknwon reasons: {rd}")
         else:
-            raise self.Error(f"renameFile failed with: {response}")
+            raise self.Error(f"setRenameFile failed with: {response}")
 
     def setMoveFile(self, file_id, new_parent_id):
         """
@@ -676,7 +678,7 @@ class API:
         :param new_parent_id: Id of destination path
         :return: Message with result of operation
         """
-        func = f"setMoveFile(Token: $Token, Copy: $Copy, NewParentID: $NewParentID, FileIDs: $FileIDs)"
+        func = "setMoveFile(Token: $Token, Copy: $Copy, NewParentID: $NewParentID, FileIDs: $FileIDs)"
         query = f"mutation SetMoveFile($Token: String!, $Copy: Boolean, $NewParentID: String!, $FileIDs: [String]!) {{ {func} }}"
 
         request = {"operationName": "SetMoveFile",
@@ -702,31 +704,33 @@ class API:
                 for error in rd["errors"]:
                     messages.append(error["message"])
                 message = '\n'.join(messages)
-                raise self.Error(f"getUserInfo failed with: {message}")
+                raise self.Error(f"setMoveFile failed with: {message}")
+            elif 'data' in rd and rd['data'].get('setMoveFile', False):
+                return file_id  # The ID of the moved file (its ID does not change)
             else:
-                return rd["data"]['setMoveFile']
+                raise self.Error(f"setMoveFile failed with unknwon reasons: {rd}")
         else:
-            raise self.Error(f"renameFile failed with: {response}")
+            raise self.Error(f"setMoveFile failed with: {response}")
 
     def setUploadFile3(self, name, parent_id, size="0", checksum="CgAQAg"):
         '''
-        A Degoo Graph API call: Appears to create a file in the Degoo filesystem. 
-        
-        Directories are created with this alone, but files it seems are not stored 
+        A Degoo Graph API call: Appears to create a file in the Degoo filesystem.
+
+        Directories are created with this alone, but files it seems are not stored
         on the Degoo filesystem at all, just their metadata is, the actual file contents
-        are stored on a Google Cloud Service. 
-        
+        are stored on a Google Cloud Service.
+
         To Add a file means to call getBucketWriteAuth4 to start the process, then
-        upload the file content, then finally, create the Degoo file item that then 
-        points to the actual file data with a URL. setUploadFile3 does not return 
+        upload the file content, then finally, create the Degoo file item that then
+        points to the actual file data with a URL. setUploadFile3 does not return
         that UTL, but getOverlay3 does.
-        
+
         :param name:        The name of the file
-        :param parent_id:   The Degoo ID of the Folder it will be placed in  
+        :param parent_id:   The Degoo ID of the Folder it will be placed in
         :param size:        The files size
         :param checksum:    The files checksum (see self.check_sum)
         '''
-        func = f"setUploadFile3(Token: $Token, FileInfos: $FileInfos)"
+        func = "setUploadFile3(Token: $Token, FileInfos: $FileInfos)"
         query = f"mutation SetUploadFile3($Token: String!, $FileInfos: [FileInfoUpload3]!) {{ {func} }}"
 
         # The size is 0 and checksum is "CgAQAg" when creating folders.
@@ -788,10 +792,10 @@ class API:
     def getBucketWriteAuth4(self, dir_id):
         '''
         A Degoo Graph API call: Appears to kick stat the file upload process.
-        
-        Returns crucial information for actually uploading the file. 
-        Not least the URL to upload it to! 
-        
+
+        Returns crucial information for actually uploading the file.
+        Not least the URL to upload it to!
+
         :param dir_id:
         '''
         kv = " {Key Value __typename}"
@@ -832,7 +836,7 @@ class API:
     def getSchema(self):
         '''
         Experimental effort to probe the GraphQL Schema that Degoo provide.
-        
+
         Not successful yet alas.
         '''
 

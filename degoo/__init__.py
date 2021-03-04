@@ -37,4 +37,5 @@ if not os.path.exists(conf_dir):
 ###########################################################################
 # Import useful util functions to the package level
 
-from .util import login, CWD, cd, ls, tree, mkpath, rm, mv, get_item, get_dir, get, put, userinfo, test
+# from .util import login, CWD, cd, ls, tree, mkpath, rm, mv, get_item, get_dir, get, put, userinfo, test
+from .util import *
