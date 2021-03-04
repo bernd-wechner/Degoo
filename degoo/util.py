@@ -22,7 +22,6 @@ from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 
 from .API import API
 from .lib import ddd, split_path, absolute_remote_path
-from sqlalchemy.sql.expression import except_
 
 ###########################################################################
 # Get the path to user configuration diectory for this app
