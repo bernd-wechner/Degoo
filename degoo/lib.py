@@ -7,12 +7,12 @@ import os
 def ddd(ID, Path):
     '''
     A Degoo Directory Dictionary (ddd).
-    
-    A convenient way to represent a current working directory so it can be 
-    saved, restored and communicated. 
-    
+
+    A convenient way to represent a current working directory so it can be
+    saved, restored and communicated.
+
     :param ID:    The Degoo ID of a a Degoo Item
-    :param Path:  The Path of that same Item  
+    :param Path:  The Path of that same Item
     '''
     return {"ID": ID, "Path": Path}
 
@@ -20,11 +20,11 @@ def ddd(ID, Path):
 def split_path(path):
     '''
     Given a path string, splits it into a list of elements.
-    
+
     os.sep is used to split the path and appears in none of the elements,
-    with the exception of parts[0] which is equal to os.sep for an absolute 
-    path and not for relative path. 
-    
+    with the exception of parts[0] which is equal to os.sep for an absolute
+    path and not for relative path.
+
     :param path:  A file path string
     '''
     allparts = []
@@ -45,11 +45,11 @@ def split_path(path):
 def absolute_remote_path(CWD, path):
     '''
     Convert a give path string to an absolute one (if it's relative).
-     
+
     :param path: The path to convert.
-    :returns: The absolute version of path 
+    :returns: The absolute version of path
     '''
     if path and path[0] == os.sep:
-        return os.path.abspath(path.rstrip(os.sep))
+        return os.path.normpath(path.rstrip(os.sep))
     else:
-        return os.path.abspath(os.path.join(CWD["Path"], path.rstrip(os.sep)))
+        return os.path.normpath(os.path.join(CWD["Path"], path.rstrip(os.sep)))
