@@ -723,7 +723,7 @@ class API:
         To Add a file means to call getBucketWriteAuth4 to start the process, then
         upload the file content, then finally, create the Degoo file item that then
         points to the actual file data with a URL. setUploadFile3 does not return
-        that UTL, but getOverlay3 does.
+        that URL, but getOverlay3 does.
 
         :param name:        The name of the file
         :param parent_id:   The Degoo ID of the Folder it will be placed in
