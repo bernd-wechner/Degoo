@@ -158,7 +158,7 @@ def login(username=None, password=None):
     if password is None:
         password = getpass.getpass()
 
-    return api.login(username, password)
+    return api.register(username, password)
 
 
 def userinfo():
