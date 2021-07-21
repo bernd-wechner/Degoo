@@ -10,10 +10,12 @@ import hashlib
 import base64
 import requests
 import humanize
+import collections
 
 from shutil import copyfile
 from appdirs import user_config_dir
 from dateutil import parser
+from collections import OrderedDict
 
 
 class API:
@@ -283,7 +285,34 @@ class API:
                 CREDS = json.loads(file.read())
 
         if CREDS:
-            response = requests.post(self.URL_login, data=json.dumps(CREDS))
+            spoof_headers = OrderedDict([
+                ('User-Agent', 'Degoo-client/0.3'),
+                ('Accept', '*/*'),
+                ('Accept-Language', 'en-US,en;q=0.5'),
+                ('Accept-Encoding', 'gzip, deflate'),
+                ('Content-Type', 'application/json'),
+                ('Origin', 'https://app.degoo.com')
+            ])
+
+            #
+            # Additional steps are necessary to enforce header order.  We
+            # shouldn't have to do this but unfortunately the end-point
+            # is fingerprinting clients to match well known browsers and
+            # rejecting the request if they don't comply.
+            #
+            # Sadly, a simple 'requests.post()' will not work because it doesn't
+            # guarantee header order.
+            #
+
+            request = requests.Request(
+                'POST',
+                self.URL_login,
+                headers=spoof_headers,
+                data=json.dumps(CREDS))
+
+            request = request.prepare()
+            degoo_session = requests.Session()
+            response = degoo_session.send(request)
 
             if response.ok:
                 rd = json.loads(response.text)
