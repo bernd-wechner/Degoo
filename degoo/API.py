@@ -8,12 +8,14 @@ import time
 import datetime
 import hashlib
 import base64
-import requests
 import humanize
+import requests
 
+from requests import Request, Session
 from shutil import copyfile
 from appdirs import user_config_dir
 from dateutil import parser
+from collections import OrderedDict
 
 
 class API:
@@ -47,7 +49,12 @@ class API:
     # TODO: Determine the syntax and use of that NextToken so that paged
     # results can be fecthed reliably as well. For now we just make calls
     # with the max limit and avoid dealing with paging.
-    LIMIT_MAX = int('1' * 31, 2) - 1
+    #
+    # They did support this:
+    # LIMIT_MAX = int('1' * 31, 2) - 1
+    # And now only support a max of 1000.
+    # Anything higher sees this error returned: getFileChildren3 failed with: Too large input!
+    LIMIT_MAX = 1000
 
     # This appears to be an invariant key that the API expects in the header
     # x-api-key:
@@ -283,7 +290,33 @@ class API:
                 CREDS = json.loads(file.read())
 
         if CREDS:
-            response = requests.post(self.URL_login, data=json.dumps(CREDS))
+            headers = OrderedDict([
+                ('User-Agent', 'Degoo-client/0.3'),
+                ('Accept', '*/*'),
+                ('Accept-Language', 'en-US,en;q=0.5'),
+                ('Accept-Encoding', 'gzip, deflate'),
+                ('Content-Type', 'application/json'),
+                ('Origin', 'https://app.degoo.com'),
+                ('Connection', 'keep-alive')
+            ])
+
+            # An effort to replicate what Firefox sees as a the body precisely (json.dumps adds spaces after the colons and comma)
+            username = CREDS["Username"]
+            password = CREDS["Password"]
+            body = f'{{"Username":"{username}","Password":"{password}"}}'
+
+            fiddler = False
+            if fiddler:
+                proxies = {"http": "http://127.0.0.1:8866", "https":"http:127.0.0.1:8866"}
+                response = requests.post(self.URL_login, headers=headers, data=json.dumps(CREDS), proxies=proxies, verify=False)
+            else:
+                s = Session()
+                r = Request('POST', self.URL_login, data=body, headers=headers)
+                R = r.prepare()
+                response = s.send(R)
+
+                # breakpoint()
+                # response = requests.post(self.URL_login, headers=headers, data=json.dumps(CREDS))
 
             if response.ok:
                 rd = json.loads(response.text)
@@ -309,6 +342,7 @@ class API:
 
                 return True
             else:
+                print(f"Login failed with: {response.status_code}: {response.reason}", file=sys.stderr)
                 return False
         else:
             with open(self.cred_file, "w") as file:

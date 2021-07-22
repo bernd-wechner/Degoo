@@ -744,7 +744,22 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
             # python-urllib uses, which seems to be blacklisted.
 
             if not dry_run:
-                wget.download(URL, out=Name, size=Size, headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/83.0.4103.61 Chrome/83.0.4103.61 Safari/537.36"})
+                try:
+                    wget.download(URL, out=Name, size=Size, headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/83.0.4103.61 Chrome/83.0.4103.61 Safari/537.36"})
+                except Exception as e:
+                    # I have seen a 302 reported as follows:
+                    #     Exception: 302: Moved Temporarily
+                    #     degoo_get: 302: Moved Temporarily
+                    # Don't know from that the exception type, so addded a report here to catch it if it happens again
+                    # and report the tuype, so we can look up how to handle them. A 302 shoudl be accompanied by a new URL,
+                    # and conceivable just try wget again here with that new URL. Getting that new URL from an exception is
+                    # the challenge, and so here is the frist step, to report the exception type to do some reading on that.
+                    #
+                    # Alas retrying the wget that failed above did not produce a 302, so it's not reliably reproducible,
+                    # But it is a legitimate repsonse and we shoudl handle it properly.
+
+                    print(f"wget Exception of type: {type(e)}")
+                    print(f"\t{str(e)}")
 
                 # The default wqet progress bar leaves cursor at end of line.
                 # It fails to print a new line. This causing glitchy printing
@@ -906,9 +921,9 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
             # The steps involved in an upload are 4 and as follows:
             #
             # 1. Call getBucketWriteAuth4 to get the URL and parameters we need for upload
-            # 2. Post to the BaseURL provided by that
+            # 2. Post the actual file to the BaseURL provided by that
             # 3. Call setUploadFile3 to inform Degoo it worked and create the Degoo item that maps to it
-            # 4. Call getOverlay3 to fetch the Degoo item this created so we can see that worked (and return the download URL)
+            # 4. Call getOverlay3 to fetch the Degoo item this created so we can see that it worked (and return the download URL)
 
             MimeTypeOfFile = magic.Magic(mime=True).from_file(local_file)
 

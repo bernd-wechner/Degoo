@@ -223,9 +223,14 @@ def main(argv=None):  # IGNORE:C0111
         elif command == P + "login":
             parser.add_argument('username', nargs='?', help="Your Degoo account username.")
             parser.add_argument('password', nargs='?', help="Your Degoo account password (we don't recommend passing passwords on the command line, for security reasons)")
+            parser.add_argument('-f', '--file', action='store_true', help=f"Read credentials from {degoo.api.cred_file}.")
             args = parser.parse_args()
 
-            success = degoo.login(args.username, args.password)
+            if args.file:
+                success = degoo.api.login()
+            else:
+                success = degoo.login(args.username, args.password)
+
             if success:
                 print("Successfully logged in.")
             else:
