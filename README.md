@@ -18,7 +18,7 @@ Support seems hit and miss. They are a small company:
 
 And have (only) two people on Customer Support so if they have [15 million users](https://www.techradar.com/news/the-best-cloud-storage#4-degoo), then  clearly they'd struggle to deliver customer support well. It's called outgrowing your boots.
 
-They have also chopped and churned, originally using P2P storage then moving away form that after a load of [poor reviews]((https://www.trustpilot.com/review/degoo.com)). They had a Windows desktop client, but no more. They are still, it seems clearly trying to find their niche in this market and establish a service model that secures a lasting future.
+They have also chopped and churned, originally using P2P storage then moving away from that after a load of [poor reviews]((https://www.trustpilot.com/review/degoo.com)). They had a Windows desktop client, but no more. They are still, it seems clearly trying to find their niche in this market and establish a service model that secures a lasting future.
 
 My interest is in keeping server data backed-up in the cloud.
 
