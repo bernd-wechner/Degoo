@@ -99,15 +99,16 @@ def main(argv=None):  # IGNORE:C0111
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
 
         if command == P + "ls" or command == P + "ll":
-            parser.add_argument('-l', '--long', action='store_true')
-            parser.add_argument('-R', '--recursive', action='store_true')
+            parser.add_argument('-l', '--long', action='store_true', help="long listing format [default: %(default)s]")
+            parser.add_argument('-H', '--human', action='store_true', help="human readable sizes [default: %(default)s]")
+            parser.add_argument('-R', '--recursive', action='store_true', help="recursive listing of directories [default: %(default)s]")
             parser.add_argument('folder', help='The folder/path to list', nargs='?', default=degoo.CWD)
             args = parser.parse_args()
 
             if command == P + "ll":
                 args.long = True
 
-            degoo.ls(args.folder, args.long, args.recursive)
+            degoo.ls(args.folder, args.long, args.human, args.recursive)
 
         elif command == P + "pwd":
             print(f"Working Directory is {degoo.CWD['Path']}")

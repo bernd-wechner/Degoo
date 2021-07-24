@@ -43,6 +43,12 @@ class API:
         os.makedirs(conf_dir)
 
     ###########################################################################
+    # The USER Agent to use on web requests. Degoo can be quite picky about
+    # this rejecting attempts to connect or inetract if it's wrong. A point
+    # of weakness in the API.
+    USER_AGENT = 'Degoo-client/0.3'
+
+    ###########################################################################
     # Empirically determined, largest value degoo supports for the Limit
     # on the Limit parameter to the GetFileChildren3 operation. It's used
     # for paging, and if more items exist there'll be a NextToken returned.
@@ -93,10 +99,14 @@ class API:
     CATLEN = 10
 
     # Width of Name field for text output we produce
-    # Used when listing files, updated to teh width needed to display
+    # Used when listing files, updated to the width needed to display
     # the longest filename. Updated by getFileChildren3 when it returns
     # a list of filenames.
     NAMELEN = 20
+
+    # Width of Size field for text output we produce
+    # Used when listing files
+    SIZELEN = 10
 
     # A list of Degoo Item properties. The three API calls:
     #    getOverlay3
@@ -291,7 +301,7 @@ class API:
 
         if CREDS:
             headers = OrderedDict([
-                ('User-Agent', 'Degoo-client/0.3'),
+                ('User-Agent', self.USER_AGENT),
                 ('Accept', '*/*'),
                 ('Accept-Language', 'en-US,en;q=0.5'),
                 ('Accept-Encoding', 'gzip, deflate'),

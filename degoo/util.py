@@ -689,7 +689,7 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
     item = get_item(remote_file)
 
     # If we landed here with a directory rather than remote_file, just redirect
-    # to the approproate downloader.
+    # to the appropriate downloader.
     if item["CategoryName"] in api.folder_types:
         return get_directory(remote_file)
 
@@ -702,6 +702,7 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
     Path = item.get("FilePath", None)
     Size = item.get('Size', 0)
     Data = item.get('Data', None)
+    Headers = {'User-Agent': api.USER_AGENT}
 
     # Remember the current working directory
     cwd = os.getcwd()
@@ -745,7 +746,14 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
 
             if not dry_run:
                 try:
-                    wget.download(URL, out=Name, size=Size, headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/83.0.4103.61 Chrome/83.0.4103.61 Safari/537.36"})
+                    if verbose > 1:
+                        print(f"Debugging:")
+                        print(f"\t{Size=}\t= {humanfriendly.format_size(Size)}")
+                        print(f"\t{Headers=}")
+                        print(f"\t{Name=}")
+                        print(f"\t{URL=}")
+
+                    wget.download(URL, out=Name, size=Size, headers=Headers)
                 except Exception as e:
                     # I have seen a 302 reported as follows:
                     #     Exception: 302: Moved Temporarily
@@ -1152,7 +1160,7 @@ def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, s
 # (excepting error messages to stderr and verbose output to stdout)
 
 
-def ls(directory=None, long=False, recursive=False):
+def ls(directory=None, long=False, human=False, recursive=False):
     if recursive:
         props = get_item(directory)
         print(f"{props['FilePath']}:")
@@ -1162,7 +1170,8 @@ def ls(directory=None, long=False, recursive=False):
     for i in items:
         if long:
             times = f"c:{i['Time_Created']}\tm:{i['Time_LastModified']}\tu:{i['Time_LastUpload']}"
-            print(f"{i['ID']}\t{i['CategoryName']:{api.CATLEN}s}\t{i['Name']:{api.NAMELEN}s}\t{times}")
+            size = f"{humanfriendly.format_size(i['Size']):>{api.SIZELEN}s}" if human else f"{i['Size']:{api.SIZELEN}d}"
+            print(f"{i['ID']}\t{i['CategoryName']:{api.CATLEN}s}\t{i['Name']:{api.NAMELEN}s}\t{size}\t{times}")
         else:
             print(f"{i['Name']}")
 
@@ -1170,7 +1179,7 @@ def ls(directory=None, long=False, recursive=False):
         print('')
         for i in items:
             if i['CategoryName'] in api.folder_types:
-                ls(i['ID'], long, recursive)
+                ls(i['ID'], long, human, recursive)
 
 
 def tree(dir_id=0, show_times=False, _done=[]):
