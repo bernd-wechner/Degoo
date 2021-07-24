@@ -712,6 +712,10 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
     elif os.path.isdir(local_directory):
         os.chdir(local_directory)
         dest_file = os.path.join(local_directory, Name)
+    elif not os.path.exists(local_directory):
+        os.makedirs(local_directory)
+        os.chdir(local_directory)
+        dest_file = os.path.join(local_directory, Name)
     else:
         raise DegooError(f"get_file: '{local_directory}' is not a directory.")
 
@@ -759,7 +763,7 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
                     #     Exception: 302: Moved Temporarily
                     #     degoo_get: 302: Moved Temporarily
                     # Don't know from that the exception type, so addded a report here to catch it if it happens again
-                    # and report the tuype, so we can look up how to handle them. A 302 shoudl be accompanied by a new URL,
+                    # and report the tuype, so we can look up how to handle them. A 302 should be accompanied by a new URL,
                     # and conceivable just try wget again here with that new URL. Getting that new URL from an exception is
                     # the challenge, and so here is the frist step, to report the exception type to do some reading on that.
                     #
@@ -791,7 +795,7 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
             text_file.write(decoded_content)
 
     else:
-        raise DegooError(f"{Path} apparantly has no URL to download from.")
+        raise DegooError(f"{Path} apparently has no URL to download from.")
 
 
 def get_directory(remote_folder, local_directory=None, verbose=0, if_missing=False, dry_run=False, schedule=False):
@@ -817,22 +821,35 @@ def get_directory(remote_folder, local_directory=None, verbose=0, if_missing=Fal
     # Remember the current working directory
     cwd = os.getcwd()
 
+    # Choose a local directory and cd there to download the files into it
     if local_directory is None:
-        pass  # all good, just use cwd
+        local_directory = item['Name']
+        # Make the target directory if needed
+        try:
+            os.mkdir(local_directory)
+        except FileExistsError:
+            # Not a problem if the local directory already exists
+            pass
+
+        # Step down into the new directory for the downloads
+        os.chdir(local_directory)
+
+        if verbose > 2:
+            print(f"No local_directory specified: cd {local_directory}")
+
     elif os.path.isdir(local_directory):
         os.chdir(local_directory)
+        if verbose > 2:
+            print(f"Specified local_directory exists: cd {local_directory}")
+
+    elif not os.path.exists(local_directory):
+        os.makedirs(local_directory)
+        os.chdir(local_directory)
+        if verbose > 2:
+            print(f"Specified local_directory was created: cd {local_directory}")
+
     else:
-        raise DegooError(f"get_file: '{local_directory}' is not a directory.")
-
-    # Make the target direcory if needed
-    try:
-        os.mkdir(item['Name'])
-    except FileExistsError:
-        # Not a problem if the remote folder already exists
-        pass
-
-    # Step down into the new directory for the downloads
-    os.chdir(item['Name'])
+        raise DegooError(f"get_file: Specified {local_directory=} is not a directory.")
 
     # Fetch and classify all Degoo drive contents of this remote folder
     children = get_children(dir_id)
@@ -841,9 +858,12 @@ def get_directory(remote_folder, local_directory=None, verbose=0, if_missing=Fal
     folders = [child for child in children if child["CategoryName"] in api.folder_types]
 
     # Download files
+    if verbose > 1:
+        print(f"fetching files from {item['FilePath']}")
+
     for f in files:
         try:
-            get_file(f['ID'], local_directory, verbose, if_missing, dry_run, schedule)
+            get_file(f['ID'], None, verbose, if_missing, dry_run, schedule)
 
         # Don't stop on a DegooError, report it but keep going.
         except DegooError as e:
@@ -852,6 +872,10 @@ def get_directory(remote_folder, local_directory=None, verbose=0, if_missing=Fal
 
     # Make the local folders and download into them
     for f in folders:
+        local_directory = os.path.join(os.curdir, f['Name'])
+        if verbose > 1:
+            print(f"fetching files from {f['FilePath']} to {local_directory}")
+
         get_directory(f['ID'], local_directory, verbose, if_missing, dry_run, schedule)
 
     # Having downloaded all the items in this remote folder chdir back to where we started
@@ -1021,7 +1045,7 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 #                 # here.
 #                 #
 #                 # The Signature is new, it's NOT the Signature that getBucketWriteAuth4 returned
-#                 # nor any obvious variation upon it (like base64 encoding)
+#                 # nor any obvious variation upon it (like base64 encoding).
 #                 #
 #                 # After some testing it's clear that the signature is a base64 encoded signature
 #                 # and is generated using a Degoo private key from the URL, which we can't predict.
@@ -1040,8 +1064,9 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 #                 # That is the Signature provided needs signing using the Degoo private key.
 #                 #
 #                 # I'd bet that setUploadFile3 given he checksum can build that string and
-#                 # using the Degoo private key generate a signature. But alas it doestn't
+#                 # using the Degoo private key generate a signature. But alas it doesn't
 #                 # return one and so we need to use getOverlay3 to fetch it explicitly.
+#
 #                 expiry = str(int((datetime.utcnow() + timedelta(days=14)).timestamp()))
 #                 expected_URL = "".join([
 #                             BaseURL.replace("storage-upload.googleapis.com/",""),
@@ -1067,7 +1092,8 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 #                 if not URL:
 #                     if verbose>0:
 #                         print("EXPERIMENT: Trying fallback URL.")
-#                     # This won't work!
+#                     # This won't work! For reasons cited above.
+#                     # Namely the URL includes a signature that is generated by Degoo using a privbate key we don't have.
 #                     URL = expected_URL
 
                 return (degoo_id, Path, URL)
