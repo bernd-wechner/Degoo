@@ -1,6 +1,6 @@
 # Degoo CLI Util(s)
 
-Degoo are a cloud storage provider based in Sweden, who provide fairly goo phone apps and web interface along with affordable plans, of up 10 TB storage.
+Degoo are a cloud storage provider based in Sweden, who provide fairly good phone apps and web interface along with affordable plans, of up 10 TB storage.
 
 [https://degoo.com/](https://degoo.com/)
 
@@ -18,11 +18,11 @@ Support seems hit and miss. They are a small company:
 
 And have (only) two people on Customer Support so if they have [15 million users](https://www.techradar.com/news/the-best-cloud-storage#4-degoo), then  clearly they'd struggle to deliver customer support well. It's called outgrowing your boots.
 
-They have also chopped and churned, originally using P2P storage then moving away form that after a load of [poor reviews]((https://www.trustpilot.com/review/degoo.com)). They had a Windows desktop client, but no more. They are still, it seems clearly trying to find their niche in this market and establish a service model that secures a lasting future.
+They have also chopped and churned, originally using P2P storage then moving away from that after a load of [poor reviews]((https://www.trustpilot.com/review/degoo.com)). They had a Windows desktop client, but no more. They are still, it seems clearly trying to find their niche in this market and establish a service model that secures a lasting future.
 
 My interest is in keeping server data backed-up in the cloud.
 
-And so, by studying their web app (which in written in Angular JS and managed with Webpack, communicating with a backend over a [graphQL]((https://graphql.org/)) interface) I've written a simple CLI (command line interface) to the cloud storage.
+And so, by studying their web app (which is written in Angular JS and managed with Webpack, communicating with a backend over a [graphQL]((https://graphql.org/)) interface) I've written a simple CLI (command line interface) to the cloud storage.
 
 It is written in Python and being developed under Linux. Being Python it's very likely highly portable, but there may be some small issues running on other systems. The only issues I can think of currently are:
 
@@ -30,7 +30,7 @@ It is written in Python and being developed under Linux. Being Python it's very 
 
 * It uses [python-magic](https://pypi.org/project/python-magic/) to determine file types (needed for upload, as the API seems to demand this metadata). That may have some system dependencies.
 
-* It uses a custom patched version of [python-wget](https://github.com/bernd-wechner/python3-wget) as the one that pip provides is lacking some cucial features and the package seems sadly unmaintained and dead to the world. This patched version stands as an op Pull Request on the upstream with no action.
+* It uses a custom patched version of [python-wget](https://github.com/bernd-wechner/python3-wget) as the one that pip provides is lacking some cucial features and the package seems sadly unmaintained and dead to the world. This patched version stands as an open Pull Request on the upstream with no action.
 
 A work in progress, it's not complete but at present it can reliably:
 
@@ -63,8 +63,9 @@ This is a work in progress (WIP) still and may or may not work well. Works for m
 * Requires Python 3.9
 * Requires the python packages in requirements.txt, install them with `pip install -r requirements.txt`
 
-* The core of it is all implemented in two files:
-    * `degoo/__init__.py` which provides all the basic functions needed
+* The core of it is all implemented in three files currenly:
+    * `degoo/API.py` which defines the basic Python API
+    * `degoo/util.py` which defines the functions for a CLI
     * `commands.py` which implements a command line tool (that is sesnitive to its name)
 
 * To build the command line tools there:
@@ -72,7 +73,7 @@ This is a work in progress (WIP) still and may or may not work well. Works for m
 
 * There's no system installer yet, it's all working in the lcoal dir as I work on it. I haven't yet put this to use as a serious backup strategy and am working on some areas to get there (slowly, when time permits)
 
-* If you want to debug, personally I can't recommend Eclipse+PyDev more highly, that's what I use. PyCharm is popular but freemium, might be easier to get started with.
+* If you want to debug, personally I can't recommend Eclipse+PyDev more highly, that's what I use. PyCharm is popular but freemium; it might be easier to get started with.
 
 * If you're wanting to look at how it's been engineered:
     * Surf to degoo.com in Firefox or Chrome
