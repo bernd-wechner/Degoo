@@ -306,8 +306,7 @@ class API:
                 ('Accept-Language', 'en-US,en;q=0.5'),
                 ('Accept-Encoding', 'gzip, deflate'),
                 ('Content-Type', 'application/json'),
-                ('Origin', 'https://app.degoo.com'),
-                ('Connection', 'keep-alive')
+                ('Origin', 'https://app.degoo.com')
             ])
 
             # An effort to replicate what Firefox sees as a the body precisely (json.dumps adds spaces after the colons and comma)
