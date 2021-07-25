@@ -278,7 +278,7 @@ class API:
     ###########################################################################
     # # Login
 
-    def login(self, username=None, password=None):
+    def login(self, username=None, password=None, verbose=0):
         '''
         Logs into a Degoo account.
 
@@ -353,6 +353,24 @@ class API:
                 return True
             else:
                 print(f"Login failed with: {response.status_code}: {response.reason}", file=sys.stderr)
+
+                if verbose > 2:
+                    print(f"Request:")
+                    print(f"\tURL: {response.request.url}", file=sys.stderr)
+                    print(f"\tmethod: {response.request.method}", file=sys.stderr)
+                    print(f"\theaders:", file=sys.stderr)
+                    for k, i in response.request.headers.items():
+                        print(f"\t\t{k}: {i}", file=sys.stderr)
+                    print(f"\tbody:", file=sys.stderr)
+                    print(f"\t\t{response.request.body}", file=sys.stderr)
+
+                    print(f"Response:", file=sys.stderr)
+                    print(f"\theaders:", file=sys.stderr)
+                    for k, i in response.headers.items():
+                        print(f"\t\t{k}: {i}", file=sys.stderr)
+                    print(f"\tcontent:", file=sys.stderr)
+                    print(f"\t\t{response.content}", file=sys.stderr)
+
                 return False
         else:
             with open(self.cred_file, "w") as file:

@@ -29,7 +29,7 @@ cwd = os.path.dirname(os.path.abspath(__file__))
 os.chdir(cwd)
 
 if os.getcwd() == cwd:
-    Commands = [degoo.command_prefix + c for c in commands]
+    Commands = ['d'] + [degoo.command_prefix + c for c in commands]
 
     for c in Commands:
         try:

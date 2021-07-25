@@ -719,6 +719,13 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
     else:
         raise DegooError(f"get_file: '{local_directory}' is not a directory.")
 
+    if verbose > 2:
+        print(f"Debugging:")
+        print(f"\tremote_file: {remote_file}")
+        print(f"\tURL: {URL}")
+        print(f"\tName: {Name}")
+        print(f"\tData: {Data}")
+
     if URL and Name:
         if not if_missing or not os.path.exists(dest_file):
             # We use wget which outputs a progress bar to stdout.
@@ -750,7 +757,7 @@ def get_file(remote_file, local_directory=None, verbose=0, if_missing=False, dry
 
             if not dry_run:
                 try:
-                    if verbose > 1:
+                    if verbose > 2:
                         print(f"Debugging:")
                         print(f"\t{Size=}\t= {humanfriendly.format_size(Size)}")
                         print(f"\t{Headers=}")
@@ -916,7 +923,12 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
     '''
 
     def progress(monitor):
-        return wget.callback_progress(monitor.bytes_read, 1, monitor.encoder.len, wget.bar_adaptive)
+        '''
+        Uses wget's bar_adaptive to remain in conformance with get_file().
+
+        :param monitor: And instance of MultipartEncoderMonitor
+        '''
+        return wget.callback_progress(monitor.bytes_read, 1, monitor.len, wget.bar_adaptive)
 
     if schedule:
         window = SCHEDULE["upload"]
@@ -929,6 +941,10 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
         if ((window_start < window_end and not in_window)
         or  (window_start > window_end and in_window)):
             wait_until_next(window_start, verbose)
+
+    if verbose > 2:
+        print(f"Debugging:")
+        print(f"\t{remote_folder=}")
 
     dest = get_item(remote_folder)
     dir_id = dest["ID"]

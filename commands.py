@@ -228,9 +228,9 @@ def main(argv=None):  # IGNORE:C0111
             args = parser.parse_args()
 
             if args.file:
-                success = degoo.api.login()
+                success = degoo.api.login(verbose=args.verbose)
             else:
-                success = degoo.login(args.username, args.password)
+                success = degoo.login(args.username, args.password, args.verbose)
 
             if success:
                 print("Successfully logged in.")
