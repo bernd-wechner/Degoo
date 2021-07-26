@@ -2,6 +2,7 @@
 # A Python front end for the Degoo GraphQL API
 
 import os
+import re
 import sys
 import json
 import time
@@ -107,6 +108,9 @@ class API:
     # Width of Size field for text output we produce
     # Used when listing files
     SIZELEN = 10
+
+    # A string used to mark redacted output
+    REDACTED = "<redacted>"
 
     # A list of Degoo Item properties. The three API calls:
     #    getOverlay3
@@ -278,7 +282,7 @@ class API:
     ###########################################################################
     # # Login
 
-    def login(self, username=None, password=None, verbose=0):
+    def login(self, username=None, password=None, verbose=0, redacted=False):
         '''
         Logs into a Degoo account.
 
@@ -335,7 +339,8 @@ class API:
                 for k, i in response.request.headers.items():
                     print(f"\t\t{k}: {i}", file=sys.stderr)
                 print(f"\tbody:", file=sys.stderr)
-                print(f"\t\t{response.request.body}", file=sys.stderr)
+                body = response.request.body if not redacted else re.sub('"(Username|Password)":".*?"', fr'"\1":"{self.REDACTED}"', response.request.body)
+                print(f"\t\t{body}", file=sys.stderr)
 
                 print(f"Response:", file=sys.stderr)
                 print(f"\tstatus: {response.status_code}", file=sys.stderr)
@@ -344,7 +349,8 @@ class API:
                 for k, i in response.headers.items():
                     print(f"\t\t{k}: {i}", file=sys.stderr)
                 print(f"\tcontent:", file=sys.stderr)
-                print(f"\t\t{response.content}", file=sys.stderr)
+                content = response.content if not redacted else re.sub('"Token":".*?"', f'"Token":"{self.REDACTED}"', str(response.content))
+                print(f"\t\t{content}", file=sys.stderr)
 
             if response.ok:
                 rd = json.loads(response.text)

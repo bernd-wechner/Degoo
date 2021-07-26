@@ -97,6 +97,7 @@ def main(argv=None):  # IGNORE:C0111
         parser = ArgumentParser(description=program_license, formatter_class=RawFormatter)
         parser.add_argument("-v", "--verbose", action="count", default=0, help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
+        parser.add_argument('-r', '--redacted', action='store_true', help="When outputting deep verbose debugging (-vvv), redact out personal security details for reporting on forums.")
 
         if command == P + "ls" or command == P + "ll":
             parser.add_argument('-l', '--long', action='store_true', help="long listing format [default: %(default)s]")
@@ -228,9 +229,9 @@ def main(argv=None):  # IGNORE:C0111
             args = parser.parse_args()
 
             if args.file:
-                success = degoo.api.login(verbose=args.verbose)
+                success = degoo.api.login(verbose=args.verbose, redacted=args.redacted)
             else:
-                success = degoo.login(args.username, args.password, args.verbose)
+                success = degoo.login(args.username, args.password, args.verbose, args.redacted)
 
             if success:
                 print("Successfully logged in.")

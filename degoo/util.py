@@ -149,7 +149,7 @@ def wait_until_next(time_of_day, verbose=0):
 # Command functions - these are entry points for the CLI tools
 
 
-def login(username=None, password=None, verbose=0):
+def login(username=None, password=None, verbose=0, redacted=False):
     '''
     Logs the user in
     '''
@@ -158,7 +158,7 @@ def login(username=None, password=None, verbose=0):
     if password is None:
         password = getpass.getpass()
 
-    return api.login(username, password, verbose)
+    return api.login(username, password, verbose, redacted)
 
 
 def userinfo():
