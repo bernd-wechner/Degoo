@@ -244,6 +244,18 @@ def main(argv=None):  # IGNORE:C0111
             for key, value in props.items():
                 print(f"\t{key}: {value}")
 
+        elif command == P + "config":
+            print(f"Degoo configurations are stored in: {degoo.api.conf_dir}")
+            print(f"After successful login:")
+            print(f"\tyour login credentials are stored in: {degoo.api.cred_file}")
+            print(f"\tyour API access keys are stored in: {degoo.api.keys_file}")
+            print(f"Default properties requested when getting remote file information are stored in: {degoo.api.DP_file}")
+            print("API configurations:")
+            print(f"\tlogin URL is: {degoo.api.URL_login}")
+            print(f"\tGraphQL URL is: {degoo.api.URL}")
+            print(f"\tUser-Agent is: {degoo.api.USER_AGENT}")
+            print(f"\tAPI key: {degoo.api.API_KEY}")
+
         elif command == P + "test":
             degoo.test()
 

@@ -22,7 +22,7 @@ import os
 import stat
 
 source = "commands.py"
-commands = ["cd", "get", "ll", "login", "ls", "mkdir", "path", "props", "put", "pwd", "rm", "mv", "tree", "user", "test"]
+commands = ["cd", "get", "ll", "login", "ls", "mkdir", "path", "props", "put", "pwd", "rm", "mv", "tree", "user", "config", "test"]
 
 # Make sure the os. functions have the script dir as their working directory
 cwd = os.path.dirname(os.path.abspath(__file__))
