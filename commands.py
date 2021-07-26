@@ -98,6 +98,7 @@ def main(argv=None):  # IGNORE:C0111
         parser.add_argument("-v", "--verbose", action="count", default=0, help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         parser.add_argument('-r', '--redacted', action='store_true', help="When outputting deep verbose debugging (-vvv), redact out personal security details for reporting on forums.")
+        parser.add_argument('-c', '--config', action='store_true', help="Report the API configs before all else.")
 
         if command == P + "ls" or command == P + "ll":
             parser.add_argument('-l', '--long', action='store_true', help="long listing format [default: %(default)s]")
@@ -105,6 +106,8 @@ def main(argv=None):  # IGNORE:C0111
             parser.add_argument('-R', '--recursive', action='store_true', help="recursive listing of directories [default: %(default)s]")
             parser.add_argument('folder', help='The folder/path to list', nargs='?', default=degoo.CWD)
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             if command == P + "ll":
                 args.long = True
@@ -112,6 +115,10 @@ def main(argv=None):  # IGNORE:C0111
             degoo.ls(args.folder, args.long, args.human, args.recursive)
 
         elif command == P + "pwd":
+            args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
+
             print(f"Working Directory is {degoo.CWD['Path']}")
 
         elif command == P + "props":
@@ -119,6 +126,8 @@ def main(argv=None):  # IGNORE:C0111
             parser.add_argument('-R', '--recursive', action='store_true')
             parser.add_argument('-b', '--brief', action='store_true')
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             if args.path.isdigit():
                 args.path = int(args.path)
@@ -143,12 +152,16 @@ def main(argv=None):  # IGNORE:C0111
         elif command == P + "path":
             parser.add_argument('path', help='The path to test.')
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             print(f"Path is: {degoo.get_dir(args.path)}")
 
         elif command == P + "cd":
             parser.add_argument('folder', help='The folder/path to makre current.')
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             cwd = degoo.cd(args.folder)
 
@@ -158,11 +171,16 @@ def main(argv=None):  # IGNORE:C0111
             parser.add_argument('-t', '--times', action='store_true', help="Show timestamps")
             parser.add_argument('folder', nargs='?', help='The folder to put_file it in')
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
+
             degoo.tree(args.folder, args.times)
 
         elif command == P + "mkdir":
             parser.add_argument('folder', help='The folder/path to list')
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             ID = degoo.mkpath(args.folder)
             path = degoo.get_item(ID)["FilePath"]
@@ -171,6 +189,8 @@ def main(argv=None):  # IGNORE:C0111
         elif command == P + "rm":
             parser.add_argument('file', help='The file/folder/path to remove')
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             path = degoo.rm(args.file)
             print(f"Deleted {path}")
@@ -178,8 +198,9 @@ def main(argv=None):  # IGNORE:C0111
         elif command == P + "mv":
             parser.add_argument('source', help='The path of file/folder to be moved')
             parser.add_argument('target', help='Path where the file or directory will be moved')
-
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             abs_from = degoo.util.path_str(args.source)
 
@@ -199,6 +220,8 @@ def main(argv=None):  # IGNORE:C0111
             parser.add_argument('remote', help='The file/folder/path to get')
             parser.add_argument('local', nargs='?', help='The directory to put it in (current working directory if not specified)')
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             degoo.get(args.remote, args.local, args.verbose, not args.force, args.dryrun, args.scheduled)
 
@@ -209,6 +232,8 @@ def main(argv=None):  # IGNORE:C0111
             parser.add_argument('local', help='The file/folder/path to put')
             parser.add_argument('remote', nargs='?', help='The remote folder to put it in')
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             result = degoo.put(args.local, args.remote, args.verbose, not args.force, args.dryrun, args.scheduled)
 
@@ -227,6 +252,8 @@ def main(argv=None):  # IGNORE:C0111
             parser.add_argument('password', nargs='?', help="Your Degoo account password (we don't recommend passing passwords on the command line, for security reasons)")
             parser.add_argument('-f', '--file', action='store_true', help=f"Read credentials from {degoo.api.cred_file}.")
             args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
 
             if args.file:
                 success = degoo.api.login(verbose=args.verbose, redacted=args.redacted)
@@ -239,22 +266,17 @@ def main(argv=None):  # IGNORE:C0111
                 print("Login failed.")
 
         elif command == P + "user":
+            args = parser.parse_args()
+            if args.config:
+                degoo.api.report_config()
+
             props = degoo.userinfo()
             print(f"Logged in user:")
             for key, value in props.items():
                 print(f"\t{key}: {value}")
 
         elif command == P + "config":
-            print(f"Degoo configurations are stored in: {degoo.api.conf_dir}")
-            print(f"After successful login:")
-            print(f"\tyour login credentials are stored in: {degoo.api.cred_file}")
-            print(f"\tyour API access keys are stored in: {degoo.api.keys_file}")
-            print(f"Default properties requested when getting remote file information are stored in: {degoo.api.DP_file}")
-            print("API configurations:")
-            print(f"\tlogin URL is: {degoo.api.URL_login}")
-            print(f"\tGraphQL URL is: {degoo.api.URL}")
-            print(f"\tUser-Agent is: {degoo.api.USER_AGENT}")
-            print(f"\tAPI key: {degoo.api.API_KEY}")
+            degoo.api.report_config()
 
         elif command == P + "test":
             degoo.test()

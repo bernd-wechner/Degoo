@@ -131,6 +131,20 @@ class API:
     # when the file is upladed and provided to SetUploadFile2.
     PROPERTIES = ""
 
+    @classmethod
+    def report_config(cls):
+        print(f"Degoo configurations are stored in: {cls.conf_dir}")
+        print(f"After successful login:")
+        print(f"\tyour login credentials are stored in: {cls.cred_file}")
+        print(f"\tyour API access keys are stored in: {cls.keys_file}")
+        print(f"Default properties requested when getting remote file information are stored in: {cls.DP_file}")
+        print("API configurations:")
+        print(f"\tlogin URL is: {cls.URL_login}")
+        print(f"\tGraphQL URL is: {cls.URL}")
+        print(f"\tUser-Agent is: {cls.USER_AGENT}")
+        print(f"\tAPI key: {cls.API_KEY}")
+        print("")  # Blank line
+
     class Error(Exception):
         '''Generic exception to raise and log different fatal errors.'''
 
@@ -304,19 +318,43 @@ class API:
                 CREDS = json.loads(file.read())
 
         if CREDS:
+            # Last Firefox login submmission observation:
+            #
+            # POST /login HTTP/1.1
+            # Host: rest-api.degoo.com
+            # User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:90.0) Gecko/20100101 Firefox/90.0
+            # Accept: */*
+            # Accept-Language: en-US,en;q=0.5
+            # Accept-Encoding: gzip, deflate, br
+            # Content-Type: application/json
+            # Content-Length: 82
+            # Origin: https://app.degoo.com
+            # Sec-Fetch-Dest: empty
+            # Sec-Fetch-Mode: cors
+            # Sec-Fetch-Site: same-site
+            # DNT: 1
+            # Sec-GPC: 1
+            # Connection: keep-alive
+
             headers = OrderedDict([
                 ('User-Agent', self.USER_AGENT),
                 ('Accept', '*/*'),
                 ('Accept-Language', 'en-US,en;q=0.5'),
                 ('Accept-Encoding', 'gzip, deflate'),
                 ('Content-Type', 'application/json'),
-                ('Origin', 'https://app.degoo.com')
+                ('Origin', 'https://app.degoo.com'),
+                # ("Sec-Fetch-Dest", "empty"),
+                # ("Sec-Fetch-Mode", "cors"),
+                # ("Sec-Fetch-Site", "same-site"),
+                # ("DNT", "1"),
+                # ("Sec-GPC", "1"),
+                # ("Connection", "keep-alive")
             ])
 
             # An effort to replicate what Firefox sees as a the body precisely (json.dumps adds spaces after the colons and comma)
             username = CREDS["Username"]
             password = CREDS["Password"]
-            body = f'{{"Username":"{username}","Password":"{password}"}}'
+            body = f'{{"Username":"{username}","Password":"{password}","GenerateToken":true}}'
 
             fiddler = False
             if fiddler:
