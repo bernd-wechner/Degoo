@@ -601,7 +601,7 @@ def get_children(directory=None):
         raise DegooError(f"get_children: Illegal directory: {directory}")
 
     if dir_id not in __CACHE_CONTENTS__:
-        __CACHE_CONTENTS__[dir_id] = api.getFileChildren3(dir_id)
+        __CACHE_CONTENTS__[dir_id] = api.getFileChildren3Ex(dir_id)
         # Having the props of all children we cache those too
         # Can overwrite existing cache as this fetch is more current anyhow
         for item in __CACHE_CONTENTS__[dir_id]:
