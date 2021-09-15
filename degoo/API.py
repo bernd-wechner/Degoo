@@ -29,6 +29,9 @@ class API:
     # The URLS used for logging in
     URL_login = "https://rest-api.degoo.com/login"
 
+    # The URL used for register
+    URL_REGISTER = "https://rest-api.degoo.com/register"
+
     ###########################################################################
     # Local files configuration
     #
@@ -383,6 +386,59 @@ class API:
                 file.write(json.dumps({"Username": "<your Degoo username here>", "Password": "<your Degoo password here>"}) + '\n')
 
             print(f"No login credentials available. Please provide some or add account details to {self.cred_file}", file=sys.stderr)
+
+    ###########################################################################
+    # # Register
+
+    def register(self, username=None, password=None, verbose=0, redacted=False):
+        '''
+        Register a new Degoo account
+        This API call will create a new degoo account with provided credentials and automatically logins to your account and
+        returns a login token
+        Note:
+           If the provided email is already registered with an exciting Degoo account , It will directly logins to your existing Degoo account.
+           So we can use it as a login method if we have an account already 😉
+        '''
+        CREDS = {}
+        if username and password:
+            CREDS = {"Username":username,"Password":password,"LanguageCode":"en-US","CountryCode":"US","Source":"Web App"}
+        elif os.path.isfile(self.cred_file):
+            with open(self.cred_file, "r") as file:
+                CREDS = json.loads(file.read())
+
+        if CREDS:
+            response = requests.post(self.URL_REGISTER, data=json.dumps(CREDS))
+
+            if response.ok:
+                rd = json.loads(response.text)
+
+                keys = {"Token": rd["Token"], "x-api-key": self.API_KEY}
+
+                # Store the token and API key for later use
+                with open(self.keys_file, "w") as file:
+                    file.write(json.dumps(keys) + '\n')
+
+                # If a username/password were provided, remember them for future use
+                if username and password:
+                    with open(self.cred_file, "w") as file:
+                        CREDS = file.write(json.dumps(CREDS) + '\n')
+
+                # Once Register and logged in, make sure self.DP_file exists
+                if not os.path.isfile(self.DP_file):
+                    source_file = os.path.basename(self.DP_file)
+                    if os.path.isfile(source_file):
+                        copyfile(source_file, self.DP_file)
+                    else:
+                        print(f"No properties are configured or available. If you can find the supplied file '{source_file}' copy it to '{self.DP_file}' and try again.")
+
+                return True
+            else:
+                return False
+        else:
+            with open(self.cred_file, "w") as file:
+                file.write(json.dumps({"Username": "<your Degoo username here>", "Password": "<your Degoo password here>"}) + '\n')
+
+            print(f"No credentials available. Please provide some or add account details to {self.cred_file}", file=sys.stderr)
 
     ###########################################################################
     # # GRAPHQL Wrappers
