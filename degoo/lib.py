@@ -44,12 +44,12 @@ def split_path(path):
 
 def absolute_remote_path(CWD, path):
     '''
-    Convert a give path string to an absolute one (if it's relative).
+    Convert a given path string to an absolute one (if it's relative).
 
     :param path: The path to convert.
     :returns: The absolute version of path
     '''
     if path and path[0] == os.sep:
-        return os.path.normpath(path.rstrip(os.sep))
+        return os.path.normpath(path.rstrip(os.sep) if len(path.strip()) > 1 else path)
     else:
         return os.path.normpath(os.path.join(CWD["Path"], path.rstrip(os.sep)))

@@ -26,6 +26,7 @@ import traceback
 
 from argparse import ArgumentParser, HelpFormatter
 
+__prog__ = "Degoo CLI"
 __all__ = []
 __version__ = 0.1
 __date__ = '2020-06-03'
@@ -74,7 +75,7 @@ def main(argv=None):  # IGNORE:C0111
 
     program_version = f"v{__version__}"
     program_build_date = str(__updated__)
-    program_version_message = '%%(prog)s %s (%s)' % (program_version, program_build_date)
+    program_version_message = f"%(prog)s {program_version} ({program_build_date})"
     program_shortdesc = __import__('__main__').__doc__.split("\n")[1]
 
     program_license = f'''
@@ -94,8 +95,8 @@ def main(argv=None):  # IGNORE:C0111
 
     try:
         # Setup argument parser
-        parser = ArgumentParser(description=program_license, formatter_class=RawFormatter)
-        parser.add_argument("-v", "--verbose", action="count", default=0, help="set verbosity level [default: %(default)s]")
+        parser = ArgumentParser(description=program_license, formatter_class=RawFormatter, prog=__prog__)
+        parser.add_argument('-v', '--verbose', action='count', default=0, help='set verbosity level [default: %(default)s]')
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         parser.add_argument('-r', '--redacted', action='store_true', help="When outputting deep verbose debugging (-vvv), redact out personal security details for reporting on forums.")
         parser.add_argument('-c', '--config', action='store_true', help="Report the API configs before all else.")
