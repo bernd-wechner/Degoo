@@ -45,7 +45,7 @@ class API:
 
     ###########################################################################
     # The USER Agent to use on web requests. Degoo can be quite picky about
-    # this rejecting attempts to connect or inetract if it's wrong. A point
+    # this rejecting attempts to connect or interact if it's wrong. A point
     # of weakness in the API.
     USER_AGENT = 'Degoo-client/0.3'
 
