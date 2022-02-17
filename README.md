@@ -8,13 +8,9 @@ Unfortunately the apps (phone and web) are pitched to a very particular demograp
 
 This makes it very difficult to use the cloud storage for flexible backup of data.
 
-Here's a fairly impartial review you might find useful:
+Here's a fairly impartial review you might find useful: [Degoo Review 2020 - This Is Why You Shouldn't Use It](https://cloudstorageinfo.org/degoo-review)
 
-[Degoo Review 2020 - This Is Why You Shouldn't Use It](https://cloudstorageinfo.org/degoo-review)
-
-Support seems hit and miss. They are a small company:
-
-[https://degoo.com/about](https://degoo.com/about)
+Support seems hit and miss. They are a small company: [https://degoo.com/about](https://degoo.com/about)
 
 And have (only) two people on Customer Support so if they have [15 million users](https://www.techradar.com/news/the-best-cloud-storage#4-degoo), then  clearly they'd struggle to deliver customer support well. It's called outgrowing your boots.
 
@@ -30,13 +26,13 @@ It is written in Python and being developed under Linux. Being Python it's very 
 
 * It uses [python-magic](https://pypi.org/project/python-magic/) to determine file types (needed for upload, as the API seems to demand this metadata). That may have some system dependencies.
 
-* It uses a custom patched version of [python-wget](https://github.com/bernd-wechner/python3-wget) as the one that pip provides is lacking some cucial features and the package seems sadly unmaintained and dead to the world. This patched version stands as an open Pull Request on the upstream with no action.
+* It uses a custom patched version of [python-wget](https://github.com/bernd-wechner/python3-wget) as the one that pip provides is lacking some crucial features and the package seems sadly unmaintained and dead to the world. This patched version stands as an open Pull Request on the upstream with no action.
 
 A work in progress, it's not complete but at present it can reliably:
 
 * log you in (if you provide valid credentials)
 
-* list files and folders on the clour drive (ls, tree)
+* list files and folders on the cloud drive (ls, tree)
 
 * navigate the cloud drive (cd, pwd)
 
@@ -50,11 +46,11 @@ Not implemented yet:
 
 * [Top Secret Cloud Storage](https://help.degoo.com/support/solutions/articles/77000065516-top-secret-zero-knowledge-storage)
 
-  * Degoo provide a good security focussed solution with their Top Secret vault, that they claim is 100% NSA proof. Only available on their phone app for now, not the web app. Will take some effort to analyse the cient-server interactions to provide CLI support.
+  * Degoo provide a good security focused solution with their Top Secret vault, that they claim is 100% NSA proof. Only available on their phone app for now, not the web app. Will take some effort to analyze the client-server interactions to provide CLI support.
 
 * Device creation
 
-  * Top level directories on your Degoo cloud drive are reserved for devices. Different licenses provide different numbers of devices. Currently you can delete a device but there is no facility for adding one again, or if you're an Ulitmate license holder adding new devices (which should be possible, but the web interface provides no such facility).
+  * Top level directories on your Degoo cloud drive are reserved for devices. Different licenses provide different numbers of devices. Currently you can delete a device but there is no facility for adding one again, or if you're an Ultimate license holder adding new devices (which should be possible, but the web interface provides no such facility).
 
 ## Using these tools
 
@@ -63,15 +59,15 @@ This is a work in progress (WIP) still and may or may not work well. Works for m
 * Requires Python 3.9
 * Requires the python packages in requirements.txt, install them with `pip install -r requirements.txt`
 
-* The core of it is all implemented in three files currenly:
+* The core of it is all implemented in three files currently:
     * `degoo/API.py` which defines the basic Python API
     * `degoo/util.py` which defines the functions for a CLI
-    * `commands.py` which implements a command line tool (that is sesnitive to its name)
+    * `commands.py` which implements a command line tool (that is sensitive to its name)
 
 * To build the command line tools there:
     * `build.py` - which just creates a pile of links to `commands.py` named as a command line tools. That's a dirty trick of sorts I used to give me a pile of CLI commands to work with so I can write bash scripts etc.
 
-* There's no system installer yet, it's all working in the lcoal dir as I work on it. I haven't yet put this to use as a serious backup strategy and am working on some areas to get there (slowly, when time permits)
+* There's no system installer yet, it's all working in the local dir as I work on it. I haven't yet put this to use as a serious backup strategy and am working on some areas to get there (slowly, when time permits)
 
 * If you want to debug, personally I can't recommend Eclipse+PyDev more highly, that's what I use. PyCharm is popular but freemium; it might be easier to get started with.
 
