@@ -1166,7 +1166,7 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
         return (ID, Path, URL)
 
 
-def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
+def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False,num_threads=1):
     '''
     Uploads a local directory recursively to the Degoo cloud store.
 
@@ -1185,8 +1185,8 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
     logging.basicConfig(format=format, level=logging.INFO,
 
                         datefmt="%H:%M:%S")
-    num_workers = 10
-    q = start_queue(num_workers)
+    
+    q = start_queue(num_threads)
 
     target_dir = get_dir(remote_folder)
     (target_junk, target_name) = os.path.split(local_directory)
@@ -1212,7 +1212,7 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
 
         for name in files:
             Name = os.path.join(root, name)
-            if num_workers == 1: ## Enable or disable Progressbar 
+            if num_threads == 1: ## Enable or disable Progressbar 
                 q.put([Name, IDs[root], verbose, if_changed, dry_run, schedule,True])
             else:
                 q.put([Name, IDs[root], verbose, if_changed, dry_run, schedule,False])
@@ -1222,7 +1222,7 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
     return (IDs[Root], target_dir["Path"])
 
 
-def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
+def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False,num_threads=1):
     '''
     Uplads a file or folder to the Degoo cloud store
 
@@ -1236,7 +1236,7 @@ def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, s
     isDirectory = os.path.isdir(local_path)
 
     if isDirectory:
-        return put_directory(local_path, remote_folder, verbose, if_changed, dry_run, schedule)
+        return put_directory(local_path, remote_folder, verbose, if_changed, dry_run, schedule,num_threads)
     elif isFile:
         return put_file(local_path, remote_folder, verbose, if_changed, dry_run, schedule)
     else:

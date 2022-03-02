@@ -230,13 +230,14 @@ def main(argv=None):  # IGNORE:C0111
             parser.add_argument('-d', '--dryrun', action='store_true', help="Show what would be uploaded but don't upload it.")
             parser.add_argument('-f', '--force', action='store_true', help="Force uploads, else only upload if changed.")
             parser.add_argument('-s', '--scheduled', action='store_true', help="Upload only when the configured schedule allows.")
+            parser.add_argument('-n','--num_threads', nargs='?', const=1, type=int,help="Number of parallel uploads while uploading a directory")
             parser.add_argument('local', help='The file/folder/path to put')
             parser.add_argument('remote', nargs='?', help='The remote folder to put it in')
             args = parser.parse_args()
             if args.config:
                 degoo.api.report_config()
 
-            result = degoo.put(args.local, args.remote, args.verbose, not args.force, args.dryrun, args.scheduled)
+            result = degoo.put(args.local, args.remote, args.verbose, not args.force, args.dryrun, args.scheduled,args.num_threads)
 
             if not args.dryrun:
                 if len(result) == 3:
