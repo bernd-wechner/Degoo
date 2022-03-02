@@ -924,7 +924,7 @@ def worker_func(q, thread_no):
         task = q.get()
         for i in range(3):        
             try:
-                put_file(task[0],task[1],task[2],task[3],task[4],task[5],skip_step4=True)
+                put_file(task[0],task[1],task[2],task[3],task[4],task[5])
                 
                 break
             except Exception as e:
@@ -933,7 +933,6 @@ def worker_func(q, thread_no):
                     logging.error(e)
                     break
                 continue 
-        os.remove(task[0])
         q.task_done()
         print(f'Thread #{thread_no} is done uploading {os.path.basename(task[0])}. #{q.qsize()} tasks left ')
     
@@ -1210,7 +1209,7 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
 
         for name in files:
             Name = os.path.join(root, name)
-            q.put(Name, IDs[root], verbose, if_changed, dry_run, schedule)
+            q.put([Name, IDs[root], verbose, if_changed, dry_run, schedule])
 
     # Directories have no download URL, they exist only as Degoo metadata
     q.join()
