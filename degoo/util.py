@@ -1003,7 +1003,8 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
             # Odd, to say the least.
             Type = os.path.splitext(local_file)[1][1:]
             Checksum = api.check_sum(local_file)
-
+            Checksum = Checksum.replace("/","_")
+            Checksum = Checksum.replace("+","-")
             if Type:
                 Key = "{}{}/{}.{}".format(KeyPrefix, Type, Checksum, Type)
             else:
