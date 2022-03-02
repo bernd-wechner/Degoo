@@ -911,9 +911,9 @@ def get(remote_path, local_directory=None, verbose=0, if_missing=False, dry_run=
     else:
         return get_file(item['ID'], local_directory, verbose, if_missing, dry_run, schedule)
 
-def start_queue():
+def start_queue(num_workers):
     q = queue.Queue()
-    for i in range(10):
+    for i in range(num_workers):
         worker = threading.Thread(target=worker_func, args=(q, i,), daemon=True)
         worker.start()
     return (q)
@@ -924,7 +924,7 @@ def worker_func(q, thread_no):
         task = q.get()
         for i in range(3):        
             try:
-                put_file(task[0],task[1],task[2],task[3],task[4],task[5])
+                put_file(task[0],task[1],task[2],task[3],task[4],task[5],task[6])
                 
                 break
             except Exception as e:
@@ -938,7 +938,7 @@ def worker_func(q, thread_no):
     
 
 
-def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
+def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False,show_progress = True):
     '''
     Uploads a local_file to the Degoo cloud store.
 
@@ -958,8 +958,8 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 
         :param monitor: And instance of MultipartEncoderMonitor
         '''
-        pass
-        #return wget.callback_progress(monitor.bytes_read, 1, monitor.len, wget.bar_adaptive)
+        
+        return wget.callback_progress(monitor.bytes_read, 1, monitor.len, wget.bar_adaptive)
 
     if schedule:
         window = SCHEDULE["upload"]
@@ -1060,7 +1060,10 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 
             # Perform the upload
             multipart = MultipartEncoder(fields=dict(parts))
-            monitor = MultipartEncoderMonitor(multipart, progress)
+            if show_progress:
+                monitor = MultipartEncoderMonitor(multipart,progress)
+            else:
+                monitor = MultipartEncoderMonitor(multipart)
 
             heads = {"ngsw-bypass": "1", "content-type": multipart.content_type, "content-length": str(multipart.len)}
 
@@ -1182,8 +1185,8 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
     logging.basicConfig(format=format, level=logging.INFO,
 
                         datefmt="%H:%M:%S")
-    
-    q = start_queue()
+    num_workers = 10
+    q = start_queue(num_workers)
 
     target_dir = get_dir(remote_folder)
     (target_junk, target_name) = os.path.split(local_directory)
@@ -1209,7 +1212,10 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
 
         for name in files:
             Name = os.path.join(root, name)
-            q.put([Name, IDs[root], verbose, if_changed, dry_run, schedule])
+            if num_workers == 1: ## Enable or disable Progressbar 
+                q.put([Name, IDs[root], verbose, if_changed, dry_run, schedule,True])
+            else:
+                q.put([Name, IDs[root], verbose, if_changed, dry_run, schedule,False])
 
     # Directories have no download URL, they exist only as Degoo metadata
     q.join()
