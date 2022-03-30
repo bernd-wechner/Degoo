@@ -53,9 +53,6 @@ class API:
     # Empirically determined, largest value degoo supports for the Limit
     # on the Limit parameter to the GetFileChildren3 operation. It's used
     # for paging, and if more items exist there'll be a NextToken returned.
-    # TODO: Determine the syntax and use of that NextToken so that paged
-    # results can be fecthed reliably as well. For now we just make calls
-    # with the max limit and avoid dealing with paging.
     #
     # They did support this:
     # LIMIT_MAX = int('1' * 31, 2) - 1
@@ -283,7 +280,7 @@ class API:
         '''
         if self.__devices__ is None:
             devices = {}
-            root = self.getFileChildren3(0)
+            root = self.getFileChildren3Ex(0)
             for d in root:
                 if d['CategoryName'] == "Device":
                     devices[int(d['DeviceID'])] = d['Name']
@@ -545,25 +542,34 @@ class API:
         else:
             raise self.Error(f"getOverlay3 failed with: {response.text}")
 
-    def getFileChildren3(self, dir_id):
+    def getFileChildren3(self, dir_id, pagination_token=None):
         '''
         A Degoo Graph API call: gets the contents of a Degoo directory (the children of a Degoo item that is a Folder)
 
         :param dir_id: The ID of a Degoo Folder item (might work for other items too?)
+        :param pagination_token: Returned by a previous call that hit the pagination limit. Continues the enumeration of children.
 
-        :returns: A list of property dictionaries, one for each child, contianing the properties of that child.
+        :returns: A tuple of (
+            a list of property dictionaries, one for each child, contianing the properties of that child
+            | an optional token string that should be passed to a subsequent call in order to continue the enumeration
+        )
         '''
         args = f"Items {{ {self.PROPERTIES} }} NextToken __typename"
         func = f"getFileChildren3(Token: $Token, ParentID: $ParentID, Limit: $Limit, Order: $Order, NextToken: $NextToken) {{ {args} }}"
         query = f"query GetFileChildren3($Token: String!, $ParentID: String!, $Limit: Int!, $Order: Int, $NextToken: String) {{ {func} }}"
 
-        request = { "operationName": "GetFileChildren3",
-                    "variables": {
+        variables = {
                         "Token": self.KEYS["Token"],
                         "ParentID": f"{dir_id}",
                         "Limit": self.LIMIT_MAX,
                         "Order": 3
-                        },
+        }
+        if pagination_token:
+            # It always seems to be the last filename returned, prepended by a constant string, but it seems better
+            #  if we just pass exactly what the last call returned
+            variables["NextToken"] = pagination_token
+        request = { "operationName": "GetFileChildren3",
+                    "variables": variables,
                     "query": query
                    }
 
@@ -580,18 +586,18 @@ class API:
                     messages.append(error["message"])
                 if "Invalid input!" in messages:
                     print(f"WARNING: Degoo Directory with ID {dir_id} apparently does not to exist!", file=sys.stderr)
-                    return []
+                    return ([], None)
                 else:
                     message = '\n'.join(messages)
                     raise self.Error(f"getFileChildren3 failed with: {message}")
             else:
                 items = rd["data"]["getFileChildren3"]["Items"]
+                next_pagination_token = None
 
                 if items:
                     next_token = rd["data"]["getFileChildren3"]["NextToken"]
                     if next_token:
-                        # TODO: Work out what to do in this case.
-                        print(f"WARNING: PAGINATION ISSUE, NextToken={next_token}", file=sys.stderr)
+                        next_pagination_token = next_token
 
                     # Fix FilePath by prepending it with a Device name.and converting
                     # / to os.sep so it becomes a valid os path as well.
@@ -639,9 +645,23 @@ class API:
 
                     self.NAMELEN = max([len(i["Name"]) for i in items])
 
-                return items
+                return (items, next_pagination_token)
         else:
             raise self.Error(f"getFileChildren3 failed with: {response}")
+
+    def getFileChildren3Ex(self, dir_id):
+        '''
+        Almost identical to getFileChildren3: handles pagination and returns all the children.
+        '''
+        items = []
+        next_token = None
+        while True:
+            (next_items, next_token) = self.getFileChildren3(dir_id, next_token)
+            if next_items:
+                items.extend(next_items)
+            if not next_token:
+                break
+        return items
 
     def getFilesFromPaths(self, device_id, path=""):
         '''
@@ -885,7 +905,7 @@ class API:
                 message = '\n'.join(messages)
                 raise self.Error(f"setUploadFile3 failed with: {message}")
             else:
-                contents = self.getFileChildren3(parent_id)
+                contents = self.getFileChildren3Ex(parent_id)
                 ids = {f["Name"]: int(f["ID"]) for f in contents}
                 if not name in ids:
                     parent = self.getOverlay3(parent_id)
