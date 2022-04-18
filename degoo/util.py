@@ -1169,7 +1169,7 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
         for name in files:
             Name = os.path.join(root, name)
 
-            put_file(Name, IDs[relative_root], verbose, if_changed, dry_run, schedule)
+            put_file(Name, relative_root, verbose, if_changed, dry_run, schedule)
 
     # Directories have no download URL, they exist only as Degoo metadata
     return (IDs[Root], target_dir["Path"])
