@@ -342,7 +342,7 @@ def rm(file):
     if not file_id:
         raise DegooError(f"rm: Illegal file: {file}")
 
-    path = api.getOverlay3(file_id)["FilePath"]
+    path = api.getOverlay4(file_id)["FilePath"]
     api.setDeleteFile5(file_id)  # @UnusedVariable
 
     return path
@@ -504,7 +504,7 @@ def get_item(path=None, verbose=0, recursive=False):
         # The root is special, it returns no properties from the degoo API
         # We dummy some up for internal use:
         if degoo_id not in __CACHE_ITEMS__:
-            __CACHE_ITEMS__[degoo_id] = api.getOverlay3(degoo_id)
+            __CACHE_ITEMS__[degoo_id] = api.getOverlay4(degoo_id)
 
         return __CACHE_ITEMS__[degoo_id]
 
@@ -602,7 +602,7 @@ def get_children(directory=None):
         raise DegooError(f"get_children: Illegal directory: {directory}")
 
     if dir_id not in __CACHE_CONTENTS__:
-        __CACHE_CONTENTS__[dir_id] = api.getAllFileChildren3(dir_id)
+        __CACHE_CONTENTS__[dir_id] = api.getAllFileChildren5(dir_id)
         # Having the props of all children we cache those too
         # Can overwrite existing cache as this fetch is more current anyhow
         for item in __CACHE_CONTENTS__[dir_id]:
@@ -972,7 +972,7 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
             # 1. Call getBucketWriteAuth4 to get the URL and parameters we need for upload
             # 2. Post the actual file to the BaseURL provided by that
             # 3. Call setUploadFile3 to inform Degoo it worked and create the Degoo item that maps to it
-            # 4. Call getOverlay3 to fetch the Degoo item this created so we can see that it worked (and return the download URL)
+            # 4. Call getOverlay4 to fetch the Degoo item this created so we can see that it worked (and return the download URL)
 
             MimeTypeOfFile = magic.Magic(mime=True).from_file(local_file)
 
@@ -1082,7 +1082,7 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 #                 #
 #                 # I'd bet that setUploadFile3 given he checksum can build that string and
 #                 # using the Degoo private key generate a signature. But alas it doesn't
-#                 # return one and so we need to use getOverlay3 to fetch it explicitly.
+#                 # return one and so we need to use getOverlay4 to fetch it explicitly.
 #
 #                 expiry = str(int((datetime.utcnow() + timedelta(days=14)).timestamp()))
 #                 expected_URL = "".join([
@@ -1099,9 +1099,9 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
                 degoo_id = api.setUploadFile3(os.path.basename(local_file), dir_id, Size, Checksum)
 
                 #################################################################
-                # # STEP 4: getOverlay3
+                # # STEP 4: getOverlay4
 
-                props = api.getOverlay3(degoo_id)
+                props = api.getOverlay4(degoo_id)
 
                 Path = props['FilePath']
                 URL = props['URL']

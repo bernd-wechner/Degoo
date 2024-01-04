@@ -26,13 +26,11 @@ Country
 Province
 Place
 Location
-Location2 {Country Province Place __typename}
-GeoLocation {Latitude Longitude __typename}
+Location2 {Country Province Place GeoLocation {Latitude Longitude}}
+GeoLocation {Latitude Longitude}
 Data
 DataBlock
 CompressionParameters
 IsShared
 ShareTime
-Shareinfo {ShareTime __typename}
-__typename
-
+Shareinfo {Status ShareTime}

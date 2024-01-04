@@ -21,16 +21,16 @@ Likes
 IsHidden
 IsInRecycleBin
 Description
-Location2 {Country Province Place __typename}
+Location2 {Country Province Place GeoLocation {Latitude Longitude}}
 Data
 DataBlock
 CompressionParameters
-Shareinfo {ShareTime __typename}
+Shareinfo {Status ShareTime}
 OptimizedURL
 Country
 Province
 Place
-GeoLocation {Latitude Longitude __typename}
+GeoLocation {Latitude Longitude}
 Location
 IsShared
 ShareTime

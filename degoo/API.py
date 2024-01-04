@@ -29,9 +29,12 @@ class API:
 
     # The URLS used for logging in
     URL_login = "https://rest-api.degoo.com/login"
-
+    
     # The URL used for register
     URL_register = "https://rest-api.degoo.com/register"
+    
+    # The URL used to get an access token
+    URL_token = "https://rest-api.degoo.com/access-token/v2"
 
     ###########################################################################
     # Local files configuration
@@ -51,18 +54,19 @@ class API:
     # The USER Agent to use on web requests. Degoo can be quite picky about
     # this rejecting attempts to connect or interact if it's wrong. A point
     # of weakness in the API.
-    USER_AGENT = 'Degoo-client/0.3'
+    USER_AGENT = 'Degoo-client/0.4'
     USER_AGENT_FIREFOX = 'Mozilla/5.0 (X11; Linux x86_64; rv:98.0) Gecko/20100101 Firefox/98.0'
+    USER_AGENT_CHROME = 'Mozilla/5.0 Slackware/13.37 (X11; U; Linux x86_64; en-US) AppleWebKit/534.16 (KHTML, like Gecko) Chrome/11.0.696.50'
 
     ###########################################################################
     # Empirically determined, largest value degoo supports for the Limit
-    # on the Limit parameter to the GetFileChildren3 operation. It's used
+    # on the Limit parameter to the GetFileChildren5 operation. It's used
     # for paging, and if more items exist there'll be a NextToken returned.
     #
     # They did support this:
     # LIMIT_MAX = int('1' * 31, 2) - 1
     # And now only support a max of 1000.
-    # Anything higher sees this error returned: getFileChildren3 failed with: Too large input!
+    # Anything higher sees this error returned: getFileChildren5 failed with: Too large input!
     LIMIT_MAX = 1000
 
     # This appears to be an invariant key that the API expects in the header
@@ -103,7 +107,7 @@ class API:
 
     # Width of Name field for text output we produce
     # Used when listing files, updated to the width needed to display
-    # the longest filename. Updated by getFileChildren3 when it returns
+    # the longest filename. Updated by getFileChildren5 when it returns
     # a list of filenames.
     NAMELEN = 20
 
@@ -115,8 +119,8 @@ class API:
     REDACTED = "<redacted>"
 
     # A list of Degoo Item properties. The three API calls:
-    #    getOverlay3
-    #    getFileChildren3
+    #    getOverlay4
+    #    getFileChildren5
     #    getFilesFromPaths
     # all want a list of explicit propeties it seems, that they will
     # return. We want them all basically, and the superset of all known
@@ -285,7 +289,7 @@ class API:
         '''
         if self.__devices__ is None:
             devices = {}
-            root = self.getAllFileChildren3(0)
+            root = self.getAllFileChildren5(0)
             for d in root:
                 if d['CategoryName'] == "Device":
                     devices[int(d['DeviceID'])] = d['Name']
@@ -357,13 +361,16 @@ class API:
             # }
 
             headers = OrderedDict([
-                ('User-Agent', self.USER_AGENT_FIREFOX),
+                ('User-Agent', self.USER_AGENT_CHROME),
                 ('Accept', '*/*'),
                 ('Accept-Language', 'en-US,en;q=0.5'),
                 ('Accept-Encoding', 'gzip, deflate, br'),
                 ('Content-Type', 'application/json'),
                 ('Referer', 'https://app.degoo.com/'),
-                ('Origin', 'https://app.degoo.com'),
+                ('Origin', 'degoo.com/CgQxMjE1'),
+                ('x-amz-content', 'https://app.degoo.com'),
+                ('x-api-authentication', 'iNDNjhDZzYWMxQTNtM2Y0IWLxIjY00COzcDNtYGN2Y2Y1gzM'),
+                ('x-version', 'DegooWebClient/1.0:2022.11.11'),
                 ("Sec-Fetch-Dest", "empty"),
                 ("Sec-Fetch-Mode", "cors"),
                 ("Sec-Fetch-Site", "same-site"),
@@ -387,7 +394,7 @@ class API:
                 response = requests.post(URL, headers=headers, data=json.dumps(CREDS), proxies=proxies, verify=False)
             elif impersonate:
                 s = requests.Session()
-                response = requests.post(URL, data=body, impersonate=impersonate)
+                response = requests.post(URL, data=body, headers=headers, impersonate=impersonate)
             else:
                 s = Session()
                 r = Request('POST', URL, data=body, headers=headers)
@@ -424,8 +431,28 @@ class API:
             if response.ok:
                 rd = json.loads(response.text)
 
-                # Degoo login returned a Token, but of late seems to return a RefreshToken.
-                keys = {"Token": rd.get("Token",rd.get("RefreshToken", None)), "x-api-key": self.API_KEY}
+                # Degoo login returned a Token, but now it seems to return a RegfreshToken
+                # Requiring a second request for an API token! 
+                if "Token" in rd:
+                    token = rd["Token"]
+                elif "RefreshToken" in rd:
+                    URL = self.URL_token
+                    refresh_token = rd["RefreshToken"]
+                    body = f'{{"RefreshToken":"{refresh_token}"}}'
+                    if impersonate:
+                        response = requests.post(URL, data=body, headers=headers, impersonate=impersonate)
+                    else:
+                        r = Request('POST', URL, data=body, headers=headers)
+                        R = r.prepare()
+                        response = s.send(R)
+                        
+                    rd = json.loads(response.text)
+                    if "AccessToken" in rd:
+                        token = rd["AccessToken"]
+                    else: 
+                        token = None
+                
+                keys = {"Token": token, "x-api-key": self.API_KEY}
 
                 if not keys["Token"]:
                     raise self.Error(f"Login failed to retrieve a session token.")
@@ -504,7 +531,7 @@ class API:
         else:
             raise self.Error(f"getUserInfo failed with: {response}")
 
-    def getOverlay3(self, degoo_id):
+    def getOverlay4(self, degoo_id):
         '''
         A Degoo Graph API call: gets information about a degoo item identified by ID.
 
@@ -514,10 +541,10 @@ class API:
         '''
         # args = self.PROPERTIES.replace("Size\n", "Size\nHash\n")
         args = f"{self.PROPERTIES}"
-        func = f"getOverlay3(Token: $Token, ID: $ID) {{ {args} }}"
-        query = f"query GetOverlay3($Token: String!, $ID: IDType!) {{ {func} }}"
+        func = f"getOverlay4(Token: $Token, ID: $ID) {{ {args} }}"
+        query = f"query GetOverlay4($Token: String!, $ID: IDType!) {{ {func} }}"
 
-        request = { "operationName": "GetOverlay3",
+        request = { "operationName": "GetOverlay4",
                     "variables": {
                         "Token": self.KEYS["Token"],
                         "ID": {"FileID": degoo_id}
@@ -537,9 +564,9 @@ class API:
                 for error in rd["errors"]:
                     messages.append(error["message"])
                 message = '\n'.join(messages)
-                raise self.Error(f"getOverlay3 failed with: {message}")
+                raise self.Error(f"getOverlay4 failed with: {message}")
             else:
-                properties = rd["data"]["getOverlay3"]
+                properties = rd["data"]["getOverlay4"]
 
             if properties:
 
@@ -578,9 +605,9 @@ class API:
             else:
                 return {}
         else:
-            raise self.Error(f"getOverlay3 failed with: {response.text}")
+            raise self.Error(f"getOverlay4 failed with: {response.text}")
 
-    def getFileChildren3(self, dir_id, pagination_token=None):
+    def getFileChildren5(self, dir_id, pagination_token=None):
         '''
         A Degoo Graph API call: gets the contents of a Degoo directory (the children of a Degoo item that is a Folder)
 
@@ -592,9 +619,9 @@ class API:
             | an optional token string that should be passed to a subsequent call in order to continue the enumeration
         )
         '''
-        args = f"Items {{ {self.PROPERTIES} }} NextToken __typename"
-        func = f"getFileChildren3(Token: $Token, ParentID: $ParentID, Limit: $Limit, Order: $Order, NextToken: $NextToken) {{ {args} }}"
-        query = f"query GetFileChildren3($Token: String!, $ParentID: String!, $Limit: Int!, $Order: Int, $NextToken: String) {{ {func} }}"
+        args = f"Items {{\n       {self.PROPERTIES} }}\n      NextToken"
+        func = f"getFileChildren5(\n      Token: $Token\n       ParentID: $ParentID\n      AllParentIDs: $AllParentIDs\n      Limit: $Limit\n      Order: $Order NextToken: $NextToken\n      ) {{\n      {args} }}\n      "
+        query = f"query GetFileChildren5(\n    $Token: String!\n    $ParentID: String\n     $AllParentIDs: [String]\n     $Limit: Int!\n     $Order: Int!\n     $NextToken: String  ) {{\n    {func} }}\n      "
 
         variables = {
                         "Token": self.KEYS["Token"],
@@ -602,11 +629,13 @@ class API:
                         "Limit": self.LIMIT_MAX,
                         "Order": 3
         }
+        
         if pagination_token:
             # It always seems to be the last filename returned, prepended by a constant string, but it seems better
             #  if we just pass exactly what the last call returned
             variables["NextToken"] = pagination_token
-        request = { "operationName": "GetFileChildren3",
+            
+        request = { "operationName": "GetFileChildren5",
                     "variables": variables,
                     "query": query
                    }
@@ -627,13 +656,13 @@ class API:
                     return ([], None)
                 else:
                     message = '\n'.join(messages)
-                    raise self.Error(f"getFileChildren3 failed with: {message}")
+                    raise self.Error(f"getFileChildren5 failed with: {message}")
             else:
-                items = rd["data"]["getFileChildren3"]["Items"]
+                items = rd["data"]["getFileChildren5"]["Items"]
                 next_pagination_token = None
 
                 if items:
-                    next_token = rd["data"]["getFileChildren3"]["NextToken"]
+                    next_token = rd["data"]["getFileChildren5"]["NextToken"]
                     if next_token:
                         next_pagination_token = next_token
 
@@ -645,7 +674,7 @@ class API:
                             i["CategoryName"] = self.CATS.get(i['Category'], i['Category'])
                     else:
                         # Get the device names if we're not getting a root dir
-                        # device_names calls back here (i.e. uses the getFileChildren3 API call)
+                        # device_names calls back here (i.e. uses the getFileChildren5 API call)
                         # with dir_id==0, to get_file the devices. We only need device names to prepend
                         # paths with if we're looking deeper than root.
                         for i in items:
@@ -685,16 +714,16 @@ class API:
 
                 return (items, next_pagination_token)
         else:
-            raise self.Error(f"getFileChildren3 failed with: {response}")
+            raise self.Error(f"getFileChildren5 failed with: {response}")
 
-    def getAllFileChildren3(self, dir_id):
+    def getAllFileChildren5(self, dir_id):
         '''
-        Almost identical to getFileChildren3: handles pagination and returns all the children.
+        Almost identical to getFileChildren5: handles pagination and returns all the children.
         '''
         items = []
         next_token = None
         while True:
-            (next_items, next_token) = self.getFileChildren3(dir_id, next_token)
+            (next_items, next_token) = self.getFileChildren5(dir_id, next_token)
             if next_items:
                 items.extend(next_items)
             if not next_token:
@@ -887,7 +916,7 @@ class API:
         To Add a file means to call getBucketWriteAuth4 to start the process, then
         upload the file content, then finally, create the Degoo file item that then
         points to the actual file data with a URL. setUploadFile3 does not return
-        that URL, but getOverlay3 does.
+        that URL, but getOverlay4 does.
 
         :param name:        The name of the file
         :param parent_id:   The Degoo ID of the Folder it will be placed in
@@ -943,10 +972,10 @@ class API:
                 message = '\n'.join(messages)
                 raise self.Error(f"setUploadFile3 failed with: {message}")
             else:
-                contents = self.getAllFileChildren3(parent_id)
+                contents = self.getAllFileChildren5(parent_id)
                 ids = {f["Name"]: int(f["ID"]) for f in contents}
                 if not name in ids:
-                    parent = self.getOverlay3(parent_id)
+                    parent = self.getOverlay4(parent_id)
                     print(f"WARNING: Failed to find {name} in {parent['FilePath']} after upload.", file=sys.stderr)
                 return ids[name]
 
@@ -1005,7 +1034,7 @@ class API:
         '''
 
         # A normal request looks like:
-        # {"operationName": "GetOverlay3", "variables": {"Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiIyMTU2Mjc4OCIsIm5iZiI6MTU5MTE1MjU1NCwiZXhwIjoxNjIyNjg4NTU0LCJpYXQiOjE1OTExNTI1NTR9.ZMbZ_Y_7bLQ_eerFssbKEr-QdujQ_p3LENeeKF-Niv4", "ID": {"FileID": 12589739461}}, "query": "query GetOverlay3($Token: String!, $ID: IDType!) { getOverlay3(Token: $Token, ID: $ID) { ID\\nMetadataID\\nUserID\\nDeviceID\\nMetadataKey\\nName\\nFilePath\\nLocalPath\\nURL\\nOptimizedURL\\nThumbnailURL\\nCreationTime\\nLastModificationTime\\nLastUploadTime\\nParentID\\nCategory\\nSize\\nPlatform\\nDistance\\nIsSelfLiked\\nLikes\\nIsHidden\\nIsInRecycleBin\\nDescription\\nCountry\\nProvince\\nPlace\\nLocation\\nLocation2 {Country Province Place __typename}\\nGeoLocation {Latitude Longitude __typename}\\nData\\nDataBlock\\nCompressionParameters\\nIsShared\\nShareTime\\nShareinfo {ShareTime __typename}\\n__typename\\n\\n } }"}
+        # {"operationName": "GetOverlay4", "variables": {"Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiIyMTU2Mjc4OCIsIm5iZiI6MTU5MTE1MjU1NCwiZXhwIjoxNjIyNjg4NTU0LCJpYXQiOjE1OTExNTI1NTR9.ZMbZ_Y_7bLQ_eerFssbKEr-QdujQ_p3LENeeKF-Niv4", "ID": {"FileID": 12589739461}}, "query": "query GetOverlay4($Token: String!, $ID: IDType!) { getOverlay4(Token: $Token, ID: $ID) { ID\\nMetadataID\\nUserID\\nDeviceID\\nMetadataKey\\nName\\nFilePath\\nLocalPath\\nURL\\nOptimizedURL\\nThumbnailURL\\nCreationTime\\nLastModificationTime\\nLastUploadTime\\nParentID\\nCategory\\nSize\\nPlatform\\nDistance\\nIsSelfLiked\\nLikes\\nIsHidden\\nIsInRecycleBin\\nDescription\\nCountry\\nProvince\\nPlace\\nLocation\\nLocation2 {Country Province Place __typename}\\nGeoLocation {Latitude Longitude __typename}\\nData\\nDataBlock\\nCompressionParameters\\nIsShared\\nShareTime\\nShareinfo {ShareTime __typename}\\n__typename\\n\\n } }"}
 
 #         request = { "query": {
 #                         "__schema": {
