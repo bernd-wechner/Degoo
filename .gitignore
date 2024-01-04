@@ -131,6 +131,8 @@ dmypy.json
 
 test_data/
 test_data2/
+test_data3/
+test_data4/
 
 degoo_cd
 degoo_get
@@ -145,6 +147,7 @@ degoo_pwd
 degoo_rm
 degoo_tree
 degoo_user
+degoo_config
 
 /.idea/
 /degoo_test
@@ -156,31 +159,17 @@ degoo_mv
 .settings/org.eclipse.wst.sse.core.prefs
 
 Backup/ChRbxbPpr6PRl9uU6KPtKVdrQvhr2BAA.mp4.b9vp8go5.tmp
-
 ChSzOY4q0pn-NQn2mBeRwm119wM0iBAA.avi.6t8tsasw.tmp
-
 ChSzOY4q0pn-NQn2mBeRwm119wM0iBAA.avi.ttwiuzb4.tmp
-
 tmp/ChSG0Vj9eZfJAKahAgTsskwgpqQdmhAA.mkv.6ig1w9mu.tmp
-
 tmp/Video 2 1.mkv
-
 tmp/Video 2.mkv
-
 Video 2 1.mkv
-
 Video 2.mkv
-
 Video 3 1.avi
-
 Video 3.avi
-
 Video/Video/ChSzOY4q0pn-NQn2mBeRwm119wM0iBAA.avi.91z64fxy.tmp
-
 Video/Video/Video 1.mp4
-
 xx
-
 d
 
-degoo_config

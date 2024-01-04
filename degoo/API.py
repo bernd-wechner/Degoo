@@ -17,6 +17,7 @@ from shutil import copyfile
 from appdirs import user_config_dir
 from dateutil import parser
 from collections import OrderedDict
+from curl_cffi import requests
 
 
 class API:
@@ -30,7 +31,7 @@ class API:
     URL_login = "https://rest-api.degoo.com/login"
 
     # The URL used for register
-    URL_REGISTER = "https://rest-api.degoo.com/register"
+    URL_register = "https://rest-api.degoo.com/register"
 
     ###########################################################################
     # Local files configuration
@@ -51,6 +52,7 @@ class API:
     # this rejecting attempts to connect or interact if it's wrong. A point
     # of weakness in the API.
     USER_AGENT = 'Degoo-client/0.3'
+    USER_AGENT_FIREFOX = 'Mozilla/5.0 (X11; Linux x86_64; rv:98.0) Gecko/20100101 Firefox/98.0'
 
     ###########################################################################
     # Empirically determined, largest value degoo supports for the Limit
@@ -283,7 +285,7 @@ class API:
         '''
         if self.__devices__ is None:
             devices = {}
-            root = self.getFileChildren3Ex(0)
+            root = self.getAllFileChildren3(0)
             for d in root:
                 if d['CategoryName'] == "Device":
                     devices[int(d['DeviceID'])] = d['Name']
@@ -296,7 +298,7 @@ class API:
     ###########################################################################
     # # Login
 
-    def login(self, username=None, password=None, verbose=0, redacted=False):
+    def login(self, username=None, password=None, register=False, verbose=0, redacted=False):
         '''
         Logs into a Degoo account.
 
@@ -306,8 +308,18 @@ class API:
         API call, as authentication, to prove we're logged in. These are written in JSON
         format to keys_file which is by default: ~/.config/degoo/keys.json
 
+        Note: The register URL provides functionality that is a superset of the login URL.
+        meaning if the username and password are already registered it simply logs in. Some
+        folk report more success using this URL than the login URL. Login issues continue
+        to plague us alas and so this method isriddled with debgging code,
+
         TODO: Support logout as well (which will POST a logout request and remove these keys)
 
+        :param username: A string being a username which is the form af an email address
+        :param password: A string which contains the Degoo passsword for the username
+        :param register: Use the register URL not the login URL
+        :param verbose: An int describing bhte level of verbosity
+        :param redacted: redacts the verbose output to hide passwords
         :returns: True if successful, False if not
         '''
         CREDS = {}
@@ -318,16 +330,17 @@ class API:
                 CREDS = json.loads(file.read())
 
         if CREDS:
-            # Last Firefox login submmission observation:
+            # Last Firefox login submmission observation (from successful login 30/3/2002):
             #
             # POST /login HTTP/1.1
             # Host: rest-api.degoo.com
-            # User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:90.0) Gecko/20100101 Firefox/90.0
+            # User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:98.0) Gecko/20100101 Firefox/98.0
             # Accept: */*
             # Accept-Language: en-US,en;q=0.5
             # Accept-Encoding: gzip, deflate, br
             # Content-Type: application/json
             # Content-Length: 82
+            # Referer: https://app.degoo.com/
             # Origin: https://app.degoo.com
             # Sec-Fetch-Dest: empty
             # Sec-Fetch-Mode: cors
@@ -335,34 +348,49 @@ class API:
             # DNT: 1
             # Sec-GPC: 1
             # Connection: keep-alive
+            #
+            # BODY:
+            # {
+            #     "GenerateToken": true,
+            #     "Password": "mypassword",
+            #     "Username": "myemail"
+            # }
 
             headers = OrderedDict([
-                ('User-Agent', self.USER_AGENT),
+                ('User-Agent', self.USER_AGENT_FIREFOX),
                 ('Accept', '*/*'),
                 ('Accept-Language', 'en-US,en;q=0.5'),
-                ('Accept-Encoding', 'gzip, deflate'),
+                ('Accept-Encoding', 'gzip, deflate, br'),
                 ('Content-Type', 'application/json'),
+                ('Referer', 'https://app.degoo.com/'),
                 ('Origin', 'https://app.degoo.com'),
-                # ("Sec-Fetch-Dest", "empty"),
-                # ("Sec-Fetch-Mode", "cors"),
-                # ("Sec-Fetch-Site", "same-site"),
-                # ("DNT", "1"),
-                # ("Sec-GPC", "1"),
-                # ("Connection", "keep-alive")
+                ("Sec-Fetch-Dest", "empty"),
+                ("Sec-Fetch-Mode", "cors"),
+                ("Sec-Fetch-Site", "same-site"),
+                ("DNT", "1"),
+                ("Sec-GPC", "1"),
+                ("Connection", "keep-alive")
             ])
+
+            URL = self.URL_register if register else self.URL_login
 
             # An effort to replicate what Firefox sees as a the body precisely (json.dumps adds spaces after the colons and comma)
             username = CREDS["Username"]
             password = CREDS["Password"]
-            body = f'{{"Username":"{username}","Password":"{password}","GenerateToken":true}}'
+            body = f'{{"GenerateToken":true,"Username":"{username}","Password":"{password}"}}'
 
-            fiddler = False
+            
+            fiddler = False # A little test option using a local insall of fiddler to watch the traffic
+            impersonate = "chrome110" # Use curl_cffi to impersonate a given browser's JA3 signature
             if fiddler:
                 proxies = {"http": "http://127.0.0.1:8866", "https":"http:127.0.0.1:8866"}
-                response = requests.post(self.URL_login, headers=headers, data=json.dumps(CREDS), proxies=proxies, verify=False)
+                response = requests.post(URL, headers=headers, data=json.dumps(CREDS), proxies=proxies, verify=False)
+            elif impersonate:
+                s = requests.Session()
+                response = requests.post(URL, data=body, impersonate=impersonate)
             else:
                 s = Session()
-                r = Request('POST', self.URL_login, data=body, headers=headers)
+                r = Request('POST', URL, data=body, headers=headers)
                 R = r.prepare()
                 response = s.send(R)
 
@@ -377,7 +405,10 @@ class API:
                 for k, i in response.request.headers.items():
                     print(f"\t\t{k}: {i}", file=sys.stderr)
                 print(f"\tbody:", file=sys.stderr)
-                body = response.request.body if not redacted else re.sub('"(Username|Password)":".*?"', fr'"\1":"{self.REDACTED}"', response.request.body)
+                if hasattr(response.request, "body"):
+                    body = response.request.body   
+                if redacted:
+                    body = re.sub('"(Username|Password)":".*?"', fr'"\1":"{self.REDACTED}"', body)            
                 print(f"\t\t{body}", file=sys.stderr)
 
                 print(f"Response:", file=sys.stderr)
@@ -393,7 +424,11 @@ class API:
             if response.ok:
                 rd = json.loads(response.text)
 
-                keys = {"Token": rd["Token"], "x-api-key": self.API_KEY}
+                # Degoo login returned a Token, but of late seems to return a RefreshToken.
+                keys = {"Token": rd.get("Token",rd.get("RefreshToken", None)), "x-api-key": self.API_KEY}
+
+                if not keys["Token"]:
+                    raise self.Error(f"Login failed to retrieve a session token.")
 
                 # Store the token and API key for later use
                 with open(self.keys_file, "w") as file:
@@ -421,59 +456,6 @@ class API:
                 file.write(json.dumps({"Username": "<your Degoo username here>", "Password": "<your Degoo password here>"}) + '\n')
 
             print(f"No login credentials available. Please provide some or add account details to {self.cred_file}", file=sys.stderr)
-
-    ###########################################################################
-    # # Register
-
-    def register(self, username=None, password=None, verbose=0, redacted=False):
-        '''
-        Register a new Degoo account
-        This API call will create a new degoo account with provided credentials and automatically logins to your account and
-        returns a login token
-        Note:
-           If the provided email is already registered with an exciting Degoo account , It will directly logins to your existing Degoo account.
-           So we can use it as a login method if we have an account already 😉
-        '''
-        CREDS = {}
-        if username and password:
-            CREDS = {"Username":username,"Password":password,"LanguageCode":"en-US","CountryCode":"US","Source":"Web App"}
-        elif os.path.isfile(self.cred_file):
-            with open(self.cred_file, "r") as file:
-                CREDS = json.loads(file.read())
-
-        if CREDS:
-            response = requests.post(self.URL_REGISTER, data=json.dumps(CREDS))
-
-            if response.ok:
-                rd = json.loads(response.text)
-
-                keys = {"Token": rd["Token"], "x-api-key": self.API_KEY}
-
-                # Store the token and API key for later use
-                with open(self.keys_file, "w") as file:
-                    file.write(json.dumps(keys) + '\n')
-
-                # If a username/password were provided, remember them for future use
-                if username and password:
-                    with open(self.cred_file, "w") as file:
-                        CREDS = file.write(json.dumps(CREDS) + '\n')
-
-                # Once Register and logged in, make sure self.DP_file exists
-                if not os.path.isfile(self.DP_file):
-                    source_file = os.path.basename(self.DP_file)
-                    if os.path.isfile(source_file):
-                        copyfile(source_file, self.DP_file)
-                    else:
-                        print(f"No properties are configured or available. If you can find the supplied file '{source_file}' copy it to '{self.DP_file}' and try again.")
-
-                return True
-            else:
-                return False
-        else:
-            with open(self.cred_file, "w") as file:
-                file.write(json.dumps({"Username": "<your Degoo username here>", "Password": "<your Degoo password here>"}) + '\n')
-
-            print(f"No credentials available. Please provide some or add account details to {self.cred_file}", file=sys.stderr)
 
     ###########################################################################
     # # GRAPHQL Wrappers
@@ -705,7 +687,7 @@ class API:
         else:
             raise self.Error(f"getFileChildren3 failed with: {response}")
 
-    def getFileChildren3Ex(self, dir_id):
+    def getAllFileChildren3(self, dir_id):
         '''
         Almost identical to getFileChildren3: handles pagination and returns all the children.
         '''
@@ -961,7 +943,7 @@ class API:
                 message = '\n'.join(messages)
                 raise self.Error(f"setUploadFile3 failed with: {message}")
             else:
-                contents = self.getFileChildren3Ex(parent_id)
+                contents = self.getAllFileChildren3(parent_id)
                 ids = {f["Name"]: int(f["ID"]) for f in contents}
                 if not name in ids:
                     parent = self.getOverlay3(parent_id)
