@@ -630,9 +630,9 @@ class API:
             | an optional token string that should be passed to a subsequent call in order to continue the enumeration
         )
         '''
-        args = f"Items {{\n       {self.PROPERTIES_ALL} }}\n      NextToken"
-        func = f"getFileChildren5(\n      Token: $Token\n       ParentID: $ParentID\n      AllParentIDs: $AllParentIDs\n      Limit: $Limit\n      Order: $Order NextToken: $NextToken\n      ) {{\n      {args} }}\n      "
-        query = f"query GetFileChildren5(\n    $Token: String!\n    $ParentID: String\n     $AllParentIDs: [String]\n     $Limit: Int!\n     $Order: Int!\n     $NextToken: String  ) {{\n    {func} }}\n      "
+        args = f"Items {{ {self.PROPERTIES_ALL} }} NextToken"
+        func = f"getFileChildren5(Token: $Token ParentID: $ParentID AllParentIDs: $AllParentIDs Limit: $Limit Order: $Order NextToken: $NextToken) {{ {args} }}"
+        query = f"query GetFileChildren5($Token: String! $ParentID: String $AllParentIDs: [String] $Limit: Int! $Order: Int! $NextToken: String  ) {{ {func} }}"
 
         variables = {
                         "Token": self.KEYS["Token"],
