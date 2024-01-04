@@ -122,7 +122,7 @@ class API:
     #    getOverlay4
     #    getFileChildren5
     #    getFilesFromPaths
-    # all want a list of explicit propeties it seems, that they will
+    # all want a list of explicit properties it seems, that they will
     # return. We want them all basically, and the superset of all known
     # properties that Degoo Items have should be stored in DP_file,
     # which is by default:
@@ -135,7 +135,7 @@ class API:
     # TODO: Are there any further properties? It would be nice for
     # example if we could ask for the checksum that is canculated
     # when the file is upladed and provided to SetUploadFile2.
-    PROPERTIES = ""
+    PROPERTIES_ALL = ""
 
     @classmethod
     def report_config(cls):
@@ -187,7 +187,18 @@ class API:
 
         if os.path.isfile(self.DP_file):
             with open(self.DP_file, "r") as file:
-                self.PROPERTIES = file.read()
+                self.PROPERTIES_ALL = file.read()
+                
+                # GetOverlay seems to barf with FieldUndefined on the following properties
+                GetOverlay4_Unsupported = ("Distance", "OptimizedURL", "Country", "Province", "Place", "Location", "GeoLocation", "IsShared", "ShareTime")
+                # The props listed can be listed with subprops in { }  
+                # so we need to cull them pretty brute force splitting 
+                # and checking first word.
+                ol4_props = []
+                for prop in self.PROPERTIES_ALL.split("\n"):
+                    if not re.split(r'\W', prop)[0] in GetOverlay4_Unsupported:
+                        ol4_props.append(prop)
+                self.PROPERTIES_GetOverlay4 = "\n".join(ol4_props)
 
         self.CATLEN = max([len(n) for _, n in self.CATS.items()])  # @ReservedAssignment
 
@@ -539,8 +550,8 @@ class API:
 
         :param degoo_id: The ID of the degoo item.
         '''
-        # args = self.PROPERTIES.replace("Size\n", "Size\nHash\n")
-        args = f"{self.PROPERTIES}"
+        # args = self.PROPERTIES_ALL.replace("Size\n", "Size\nHash\n")
+        args = f"{self.PROPERTIES_GetOverlay4}"
         func = f"getOverlay4(Token: $Token, ID: $ID) {{ {args} }}"
         query = f"query GetOverlay4($Token: String!, $ID: IDType!) {{ {func} }}"
 
@@ -619,7 +630,7 @@ class API:
             | an optional token string that should be passed to a subsequent call in order to continue the enumeration
         )
         '''
-        args = f"Items {{\n       {self.PROPERTIES} }}\n      NextToken"
+        args = f"Items {{\n       {self.PROPERTIES_ALL} }}\n      NextToken"
         func = f"getFileChildren5(\n      Token: $Token\n       ParentID: $ParentID\n      AllParentIDs: $AllParentIDs\n      Limit: $Limit\n      Order: $Order NextToken: $NextToken\n      ) {{\n      {args} }}\n      "
         query = f"query GetFileChildren5(\n    $Token: String!\n    $ParentID: String\n     $AllParentIDs: [String]\n     $Limit: Int!\n     $Order: Int!\n     $NextToken: String  ) {{\n    {func} }}\n      "
 
@@ -739,7 +750,7 @@ class API:
         :param device_id: A Degoo device ID
         :param path:      Don't know what this is.
         '''
-        args = f"{self.PROPERTIES}"
+        args = f"{self.PROPERTIES_ALL}"
         func = f"getFilesFromPaths(Token: $Token, FileIDPaths: $FileIDPaths) {{ {args} }}"
         query = f"query GetFilesFromPaths($Token: String!, $FileIDPaths: [FileIDPath]!) {{ {func} }}"
 

@@ -34,4 +34,3 @@ GeoLocation {Latitude Longitude}
 Location
 IsShared
 ShareTime
-__typename
