@@ -12,11 +12,15 @@ import base64
 import getpass
 import requests
 import humanfriendly
+import threading
+import logging
+import time
+import queue
 
 from appdirs import user_config_dir
 from datetime import datetime
 from dateutil.tz import tzutc, tzlocal
-
+import pathlib
 from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 # from clint.textui.progress import Bar as ProgressBar
 
@@ -908,8 +912,34 @@ def get(remote_path, local_directory=None, verbose=0, if_missing=False, dry_run=
     else:
         return get_file(item['ID'], local_directory, verbose, if_missing, dry_run, schedule)
 
+def start_queue(num_workers):
+    q = queue.Queue()
+    for i in range(num_workers):
+        worker = threading.Thread(target=worker_func, args=(q, i,), daemon=True)
+        worker.start()
+    return (q)
+    
+    
+def worker_func(q, thread_no):
+    while True:
+        task = q.get()
+        for i in range(3):        
+            try:
+                put_file(task[0],task[1],task[2],task[3],task[4],task[5],task[6])
+                
+                break
+            except Exception as e:
+                if i >=2:
+                    logging.error(f'ERROR could not upload {os.path.basename(task[0])} to {task[1]}')
+                    logging.error(e)
+                    break
+                continue 
+        q.task_done()
+        print(f'Thread #{thread_no} is done uploading {os.path.basename(task[0])}. #{q.qsize()} tasks left ')
+    
 
-def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
+
+def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False,show_progress = True):
     '''
     Uploads a local_file to the Degoo cloud store.
 
@@ -929,6 +959,7 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 
         :param monitor: And instance of MultipartEncoderMonitor
         '''
+        
         return wget.callback_progress(monitor.bytes_read, 1, monitor.len, wget.bar_adaptive)
 
     if schedule:
@@ -1004,7 +1035,8 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
             # Odd, to say the least.
             Type = os.path.splitext(local_file)[1][1:]
             Checksum = api.check_sum(local_file)
-
+            Checksum = Checksum.replace("/","_")
+            Checksum = Checksum.replace("+","-")
             if Type:
                 Key = "{}{}/{}.{}".format(KeyPrefix, Type, Checksum, Type)
             else:
@@ -1029,14 +1061,17 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
 
             # Perform the upload
             multipart = MultipartEncoder(fields=dict(parts))
-            monitor = MultipartEncoderMonitor(multipart, progress)
+            if show_progress:
+                monitor = MultipartEncoderMonitor(multipart,progress)
+            else:
+                monitor = MultipartEncoderMonitor(multipart)
 
             heads = {"ngsw-bypass": "1", "content-type": multipart.content_type, "content-length": str(multipart.len)}
 
             response = requests.post(BaseURL, data=monitor, headers=heads)
 
             # A new line after the progress bar is complete
-            print()
+            #print()
 
             # We expect a 204 status result, which is silent acknowledgement of success.
             if response.ok and response.status_code == 204:
@@ -1132,7 +1167,7 @@ def put_file(local_file, remote_folder, verbose=0, if_changed=False, dry_run=Fal
         return (ID, Path, URL)
 
 
-def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
+def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False,num_threads=1):
     '''
     Uploads a local directory recursively to the Degoo cloud store.
 
@@ -1146,11 +1181,20 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
     :returns: A tuple containing the Degoo ID and the Remote file path
     '''
     IDs = {}
+    format = "%(asctime)s: %(message)s"
+
+    logging.basicConfig(format=format, level=logging.INFO,
+
+                        datefmt="%H:%M:%S")
+    
+    q = start_queue(num_threads)
 
     target_dir = get_dir(remote_folder)
     (target_junk, target_name) = os.path.split(local_directory)
-
-    Root = target_name
+    path = pathlib.PurePath(local_directory)
+    target_name = path.name
+    Root = local_directory
+    print("Localdir: ",local_directory,"Target Dir:",target_dir,target_junk,"target name:",target_name)
     IDs[Root] = mkdir(target_name, target_dir['ID'], verbose - 1, dry_run)
 
     for root, dirs, files in os.walk(local_directory):
@@ -1164,19 +1208,22 @@ def put_directory(local_directory, remote_folder, verbose=0, if_changed=False, d
 
         for name in dirs:
             Name = os.path.join(root, name)
-
-            IDs[Name] = mkdir(name, IDs[relative_root], verbose - 1, dry_run)
+            print (name,relative_root,IDs) 
+            IDs[Name] = mkdir(name, IDs[root], verbose - 1, dry_run)
 
         for name in files:
             Name = os.path.join(root, name)
-
-            put_file(Name, IDs[relative_root], verbose, if_changed, dry_run, schedule)
+            if num_threads == 1: ## Enable or disable Progressbar 
+                q.put([Name, IDs[root], verbose, if_changed, dry_run, schedule,True])
+            else:
+                q.put([Name, IDs[root], verbose, if_changed, dry_run, schedule,False])
 
     # Directories have no download URL, they exist only as Degoo metadata
+    q.join()
     return (IDs[Root], target_dir["Path"])
 
 
-def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False):
+def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, schedule=False,num_threads=1):
     '''
     Uplads a file or folder to the Degoo cloud store
 
@@ -1190,7 +1237,7 @@ def put(local_path, remote_folder, verbose=0, if_changed=False, dry_run=False, s
     isDirectory = os.path.isdir(local_path)
 
     if isDirectory:
-        return put_directory(local_path, remote_folder, verbose, if_changed, dry_run, schedule)
+        return put_directory(local_path, remote_folder, verbose, if_changed, dry_run, schedule,num_threads)
     elif isFile:
         return put_file(local_path, remote_folder, verbose, if_changed, dry_run, schedule)
     else:
